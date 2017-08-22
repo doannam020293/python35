@@ -735,3 +735,59 @@ def order_index_tag(tag):
     :param a:
     :return: Index 
     '''
+def check_order(index_list,full_filename):
+    logger = logging.getLogger(__name__)
+    logger = create_log_file(logger,logfile=r'C:\nam\work\learn_tensorflow\credit\check_index',)
+
+    index_tags_text = [a.get_text().strip() for a in index_tags]
+    index_list_raw = [re.search(level_regex, a).group() for a in index_tags_text]
+    index_list = [Index_doc(a) for a in index_list_raw]
+    index_list.sort()
+    a = 'check index cho list sau: {}'.format(index_list)
+    logger.debug(a)
+    index_list.sort()
+    for i in range(len(index_list)):
+        if i >1:
+            check = (index_list[i] -index_list[i-1])
+            if check !=1:
+                a  = 'thieu index giua 2 index sau: {} va {} cua file name: {}'.format(index_list[i],index_list[i-1],full_filename)
+                logger.debug(a)
+                print(a)
+            else:
+                logger.debug('chuan')
+def run_check_order():
+    # x = Index_doc('1.1.')
+    # y = Index_doc('1.2.1')
+    # print(x>y)
+    logger = logging.getLogger(__name__)
+    logger = create_log_file(logger,logfile=r'C:\nam\work\learn_tensorflow\credit\check_index',)
+    folder_input1 = r'C:\nam\work\learn_tensorflow\credit\output\pickle\0'
+    folder_input2 = r'C:\nam\work\learn_tensorflow\credit\output\pickle\2'
+    folder_input3 = r'C:\nam\work\learn_tensorflow\credit\output\pickle\8'
+    list_vay1 = [os.path.join(folder_input1,file) for file in os.listdir(folder_input1)]
+    list_vay2 = [os.path.join(folder_input2,file) for file in os.listdir(folder_input2)]
+    list_vay3 = [os.path.join(folder_input3,file) for file in os.listdir(folder_input3)]
+    list_vay = list_vay1 +list_vay2+list_vay3
+    for full_filename in list_vay:
+        # full_filename = r'C:\nam\work\learn_tensorflow\credit\output\pickle\2\366722.html'
+        with open(full_filename, encoding='utf-8') as file:
+            soup = BeautifulSoup(file, "html.parser")
+         # lấy ra những class là bold
+        style_scc =soup.style
+        list_css = (style_scc.get_text()).split('.')
+        list_bold_tag = [x[:x.index('{')].strip() for x in list_css if 'bold' in x]
+        # tạo regex những class là bold
+        regex_bold_class = re.compile('|'.join(list_bold_tag))
+        # tìm structure của file
+        # regex kiểu 1.1, 1.2, II, I, V,...
+        index_regex = re.compile('[1-9]\.[1-9]*|(IX\.|IV\.|V?I{0,3}\.)')
+        level_regex = re.compile('[1-9]\.[1-9]*')
+
+        index_tags =  soup.find_all(text=index_regex ,attrs={'class': regex_bold_class})
+        index_tags_text = [a.get_text().strip() for a in index_tags]
+        index_list_raw = [re.search(level_regex,a).group() for a in index_tags_text]
+        index_list = [Index_doc(a) for a in index_list_raw]
+        index_list.sort()
+        a = 'check index cho list sau: {}'.format(index_list)
+        logger.debug(a)
+        check_order(index_list,full_filename)
