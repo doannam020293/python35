@@ -226,6 +226,13 @@ class html_tables(object):
                 table.dropna(inplace=True)
         else:
             table = None
+
+
+        #check header co bi None hay khong, neu None thi dien gia tri: column_none
+        column = pd.DataFrame(table.columns).fillna(value='column_none')
+        column_fill_na = column.values.reshape(table.shape[1])
+        table = pd.DataFrame(table, columns=column_fill_na)
+
         return table
         # trường hợp colspan thì ta sẽ phải transpose để fillna với method = ffill
 
@@ -384,9 +391,9 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
     logger = create_log_file(logger,logfile=r'C:\Users\Windows 10 TIMT\OneDrive\Nam\OneDrive - Five9 Vietnam Corporation\work\data_output\credit\log file\check_index{}'.format(process_id),)
 
     #connect mongo
-
     db_cic = create_connect_to_mongo(locahost=True,database='cic')
     coll_the = db_cic[collection_name]
+    coll_the.remove({})
     #  khai báo  regex cho những table cần lấy thông tin
         # regex cho the
     regex_thong_tin_nhan_dang = re.compile("thông tin nhận dạng|1\.1")
@@ -403,10 +410,9 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
     # for full_filename in list_file:
     #     try:
     input_db = dict()
-    full_filename = r'C:\nam\work\learn_tensorflow\credit\output\pickle\6\1000.html'
+    full_filename = r'C:\nam\work\learn_tensorflow\credit\output\pickle\6\100357.html'
     with open(full_filename, encoding='utf-8') as file:
         soup = BeautifulSoup(file, "html.parser")
-
     #thông tin k nằm trong table nào
     no_number = soup.find(text=re.compile('Số:'))
     header = soup.find('span', attrs={'class': 'headerfont'}).text
@@ -416,7 +422,6 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
     #find structure. TÌm những header lơn của file
     index_tags = get_index_tag(soup)
     index_tags_text = [a.get_text().strip() for a in index_tags]
-
     # lặp giữa các index để lấy ra thông tin giữa 2 index nằm cạnh nhau
     for i in range(len(index_tags)):
         # i = 0
@@ -465,9 +470,9 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
                 # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
                 df_table11 = df_table11.clean_table(case =case_table24_vay)
                 record = df_table11.to_dict('records')
-            elif re.search(regex_table21_vay,key) is not None:
+            elif re.search(regex_table21_vay, key) is not None:
                 # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
-                df_table11 = df_table11.clean_table(case =case_table21_vay)
+                df_table11 = df_table11.clean_table(case=case_table21_vay)
                 record = df_table11.to_dict('records')
             else:
                 df_table11 = df_table11.clean_table()
@@ -475,19 +480,26 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
             # record[key] = record
         else:
             #chu ý: table 2.2 của báo cáo thẻ tín dụng, có thể có 2 table, mà chưa được fix
-            print('nhieu table tai day')
+            # print('nhieu table tai day')
+            logger.warning('nhieu table tai day sau index: {} cua file{}'.format(key,full_filename))
+            record = []
+            for tag_item in list(tag):
+                df_table11 = html_tables(tag_item)
+                df_table11 = df_table11.clean_table()
+                record_item = df_table11.to_dict('records')
+                record.append(record_item)
+
         # nếu dữ liệu thu được giữa cac index khác none thì ghi vào db
         if record != '':
             key = key.replace('.', '\uff0E')
             input_db[key] = record
             input_db['_id'] = full_filename
     # with lock:
-        # print(full_filename)
-        # coll_the = db_cic['the_tin_dung']
     coll_the.insert_one(input_db)
         # except Exception as error:
         #     print('error at file: (%s), chi tiet loi nhu sau: (%s)' %(full_filename,error))
-
+        #     logger.error('error at file: (%s), chi tiet loi nhu sau: (%s)' %(full_filename,error))
+        #
 
 def import_html_to_mongodb(list_file,lock,process_id ='1' , collection_name='vay'):
     '''
@@ -507,6 +519,7 @@ def import_html_to_mongodb(list_file,lock,process_id ='1' , collection_name='vay
     #connect mongo
     db_cic = create_connect_to_mongo(locahost=True,database='cic')
     coll_the = db_cic[collection_name]
+    # coll_the.remove({})
     #  khai báo  regex cho những table cần lấy thông tin
         # regex cho the
     regex_thong_tin_nhan_dang = re.compile("thông tin nhận dạng|1\.1")
@@ -535,7 +548,6 @@ def import_html_to_mongodb(list_file,lock,process_id ='1' , collection_name='vay
             #find structure. TÌm những header lơn của file
             index_tags = get_index_tag(soup)
             index_tags_text = [a.get_text().strip() for a in index_tags]
-
             # lặp giữa các index để lấy ra thông tin giữa 2 index nằm cạnh nhau
             for i in range(len(index_tags)):
                 # i = 0
@@ -594,21 +606,25 @@ def import_html_to_mongodb(list_file,lock,process_id ='1' , collection_name='vay
                     # record[key] = record
                 else:
                     #chu ý: table 2.2 của báo cáo thẻ tín dụng, có thể có 2 table, mà chưa được fix
-                    print('nhieu table tai day')
+                    # print('nhieu table tai day')
+                    logger.warning('nhieu table tai day sau index: {} cua file{}'.format(key, full_filename))
+                    record = []
+                    for tag_item in list(tag):
+                        df_table11 = html_tables(tag_item)
+                        df_table11 = df_table11.clean_table()
+                        record_item = df_table11.to_dict('records')
+                        record.append(record_item)
+
                 # nếu dữ liệu thu được giữa cac index khác none thì ghi vào db
                 if record != '':
                     key = key.replace('.', '\uff0E')
                     input_db[key] = record
                     input_db['_id'] = full_filename
             with lock:
-                print(full_filename)
-                coll_the = db_cic['the_tin_dung']
                 coll_the.insert_one(input_db)
         except Exception as error:
             print('error at file: (%s), chi tiet loi nhu sau: (%s)' %(full_filename,error))
             logger.error('error at file: (%s), chi tiet loi nhu sau: (%s)' %(full_filename,error))
-
-
 
 
 
@@ -630,10 +646,5 @@ def run_vay2208():
 
 
 if __name__ == '__main__':
-    # run_TTD2108()
-    # import_html_to_mongodb_without_lock(1,1)
-    # import_html_to_mongodb_without_lock(1,1)
-    # import_html_to_mongodb()
-    # run_vay2208()
-    # import_html_to_mongodb_without_lock(1,1)
+    # import_html_to_mongodb_without_lock(1, 1, process_id='1', collection_name='vay')
     run_vay2208()
