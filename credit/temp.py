@@ -989,3 +989,172 @@ def run_TTD2108():
         proc.start()
     for proc in processes:
         proc.join()
+
+
+
+def apply_clean_phone_number_2308(row,name_column):
+    # row = '07103/839008 / 0909363692 071 03766669'
+    # remove các kí tự không phải là số, ngoại trừ 2 trường hợp dau / va dau space dau -
+    pattern_number = re.compile('[^0-9/ -]', re.IGNORECASE) # remove luôn cả chữ ext và dấu đóng mở ngoặc
+    row = re.sub(pattern_number,"",str(row))
+    #check truong hợp trước khi split mà được sdt thì ta sẽ ưu tiên remove  nó trước
+
+    #thi thoang co doan can split = space, xem xet lai doan code.
+    #split = dau / hoac dau space ( dau cach), dấu -
+    # split_character = ['/',' ','-']
+    # for character in split_character:
+
+    list_number  = [numb for numb in re.split('/| |-',row) if len(numb)>0]
+    dict_phone = defaultdict(list)
+    for i, number in enumerate(list_number):
+        # number ='84939800227'
+        # lam sach sdt, them so 0 vao dau, hoặc thay thế 84 = số 0
+        if re.search(re.compile('^84'), number) is not None:
+            number = number.replace('84', '0', 1)
+            # nếu có nhiều hơn 1 số 0 ở đầu, thì sẽ replace nó
+            number = re.sub(re.compile('^00+'), "0", str(number))
+            # number = number.replace('84', '0', 1)
+        # add so 0 vào đầu
+        if re.search(re.compile('^0'), number) is None:
+            number = '0' + number  # removw list cu bangf phan tu nayd
+        # do 1 sdt co the vua split bằng / hoặc space, nên ta sẽ chỉ áp dụng split nếu kết quả sau khi split là 1 số cố định hoặc 1 số điện thoại, nếu không ta sẽ gộp 2 kết quả split lại, thử xem nó có là số điện thoại hay không
+        if classify_fixedphone_mobiphone(number) != 'other':
+            dict_phone[classify_fixedphone_mobiphone(number)].append(number)
+        elif i>0 and classify_fixedphone_mobiphone(list_number[i-1] + list_number[i]) != 'other': # check điều kiện i>0 để loại trường hợp phần tử 0 kết hợp với phần tử -1
+            dict_phone[classify_fixedphone_mobiphone(list_number[i-1] + list_number[i])].append(list_number[i-1] + list_number[i])
+        elif i>1 and classify_fixedphone_mobiphone(list_number[i-2]+list_number[i-1] + list_number[i]) != 'other': # check điều kiện i>1 để loại trường hợp phần tử 0 kết hợp với phần tử -1
+            dict_phone[classify_fixedphone_mobiphone(list_number[i-2]+list_number[i-1] + list_number[i])].append(list_number[i-2]+list_number[i-1] + list_number[i])
+        elif i > 2 and classify_fixedphone_mobiphone(list_number[i - 3]+list_number[i - 2]+list_number[i - 1] + list_number[
+            i]) != 'other':  # check điều kiện i>1 để loại trường hợp phần tử 0 kết hợp với phần tử -1
+            dict_phone[classify_fixedphone_mobiphone(list_number[i - 3]+list_number[i - 2] + list_number[i - 1] + list_number[i])].append(
+                list_number[i - 3]+ list_number[i - 2] + list_number[i - 1] + list_number[i])
+        else:
+            pass
+    for key, value in dict_phone.items():
+        dict_phone[key] = ','.join(value) if len(value) > 0 else None
+    return dict_phone[name_column] if len(dict_phone[name_column]) >0 else None
+
+
+
+def update_field_with_regex(collection,regex,new_key):
+    '''
+    rename field with regex 
+    :param collection: collection
+    :param regex:  regex cua key cần được replace bằng new_key. VD: re.compile('nam')
+    :param new_key: 
+    :return: 
+    '''
+    #update field with regex
+    # collection = db['the1']
+    # new_key = '1_1_thong_tin_nhan_dang_nam_lan5'
+    bulk = collection.initialize_ordered_bulk_op()
+    counter = 0
+    cusor = collection.find()
+    for doc in cusor:
+        # doc = list(cusor)[0]
+        for k in doc:
+            # k = '1_1_thong_tin_nhan_dang_nam_lan2'
+            if re.search(regex,k) is not None:
+                print('match')
+                bulk.find({"_id": doc['_id']}).update_one({"$unset": {k:1}, "$set": {new_key: doc[k]}})
+                counter +=1
+        if counter % 1000 ==0: # update sau khi duyet 1000 document
+            try:
+                bulk.execute()
+                bulk = collection.initialize_ordered_bulk_op()
+            except Exception as error:
+                print(error)
+    if counter % 1000 !=0:
+        try:
+            bulk.execute()
+        except Exception as error:
+            print(error)
+
+
+def nam_2308():
+    db = create_connect_to_mongo(database='cic', locahost=True)
+    # query= list(db['the_tin_dung'].find())
+    coll_the = db['the_tin_dung']
+    # rename key : 1．1． Thông tin nhận dạng => 1_1_thong_tin_nhan_dang
+    coll_the.update_many({}, {'$rename': {'1．1． Thông tin nhận dạng': '1_1_thong_tin_nhan_dang'}})
+    # rename key : 1_1_thong_tin_nhan_dang.Mã số CIC: => 1_1_thong_tin_nhan_dang.Mã CIC:
+    coll_the.update_many({}, {'$rename': {'1_1_thong_tin_nhan_dang.Mã số CIC:': '1_1_thong_tin_nhan_dang.Mã CIC:'}})
+
+    # remove ban ghi của doanh nghiep
+    coll_the.delete_many(
+        {"1_1_thong_tin_nhan_dang.Tên doanh nghiệp:":
+             {"$exists": 1}},
+    )
+
+    a = list(db['the_tin_dung'].find({}, {'1_1_thong_tin_nhan_dang.no_number': 1, '_id': 0}))
+    query = list(db['the_tin_dung'].find({}, {'1_1_thong_tin_nhan_dang': 1, '_id': 0}))
+    df = pd.DataFrame(a[1:2])
+    df = pd.DataFrame(a[1:2])
+    data = [list(a.values()) for a in query]
+    data1 = [a[0] for a in data if len(a) > 0]
+    # df = pd.DataFrame(data1)
+    # nam_to_excel(df,r'C:\Users\Windows 10 TIMT\OneDrive\Nam\OneDrive - Five9 Vietnam Corporation\work\data_output\credit\output\sdt')
+
+    # get những subkey của primary key : "1_1_thong_tin_nhan_dang"
+    name_parent_key = '1_1_thong_tin_nhan_dang'
+    distinctThingFields = check_unique_key(coll_the, '1_1_thong_tin_nhan_dang')
+    a = [a['_id'] for a in distinctThingFields['results']]
+
+
+def check_unique_key(coll):
+    '''
+    :param coll:  collection trong mongodb
+    :return all unique key in collection: 
+    '''
+    mapper = Code("""
+        function() {
+                      for (var key in this) { emit(key, null); }
+                   }
+    """)
+    reducer = Code("""
+        function(key, stuff) { return null; }
+    """)
+
+    distinctThingFields = coll.map_reduce(mapper, reducer
+        , out = {'inline' : 1}
+        , full_response = True)
+    ## do something with distinctThingFields['results']
+
+
+
+
+
+
+def nam_pos():
+    db_pos = create_connect_to_mongo(database='PosData',)
+    # query= list(db['the_tin_dung'].find())
+    coll_oder = db_pos['Order']
+    df_order  = pd.DataFrame(list(coll_oder.find({},{'_id':0})))
+
+    a = coll_oder.aggregate([
+        {'$group':
+            {'_id':'$order_id',
+            'order_full': {'$addToSet': '$product_id'}}
+        }
+        ])
+    b = coll_oder.aggregate([
+        {'$group':
+            {'_id':'$order_id',
+            'order_full': {'$addToSet': '$name'}}
+        }
+        ])
+
+    df_order1 = pd.DataFrame(list(a))
+    df_order2 = pd.DataFrame(list(b))
+
+    coll_associate = db_pos['AssociationRule']
+    df_rule  = pd.DataFrame(list(coll_associate.find({},{'_id':0})))
+
+    coll_support = db_pos['SupportRule']
+    df_support  = pd.DataFrame(list(coll_support.find({},{'_id':0})))
+
+    coll_product = db_pos['Product']
+    df_product  = pd.DataFrame(list(coll_product.find({},{'_id':0})))
+
+    support_min = 0.03
+    lift = 1.5

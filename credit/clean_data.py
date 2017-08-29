@@ -85,7 +85,6 @@ def find_collectoral():
             text_list = soup.find(text=re.compile(r'Thông tin tài sản đảm bảo')).parent
             text = list(text_list.next_siblings)[1]
             text.next_sibling
-
             if re.search('Chủ thẻ tín dụng có tài sản đảm bảo tại Ngân hàng',text) is not None:
                 list_have_col.append(filename) # 984
             # text = text_list.strip()
@@ -119,6 +118,16 @@ def classify_fixedphone_mobiphone(phone):
     '''086 088 089 là số vietel'''  #=========================================
     '''086 088 089 là số vietel'''  #=========================================
     '''086 088 089 là số vietel'''  #=========================================
+    # làm sạch trước khi kiểm tra pattern
+    if re.search(re.compile('^84'), phone) is not None: # lam sach sdt, them so 0 vao dau, hoặc thay thế 84 = số 0
+        phone = phone.replace('84', '0', 1)
+        # nếu có nhiều hơn 1 số 0 ở đầu, thì sẽ replace nó
+        phone = re.sub(re.compile('^00+'), "0", str(phone))
+        # phone = phone.replace('84', '0', 1)
+    # add so 0 vào đầu
+    if re.search(re.compile('^0'), phone) is None:
+        phone = '0' + phone  # removw list cu bangf phan tu nayd
+
     pattern_fix = re.compile('^[2-8]|^[0][2-8]')
     pattern_mobile = re.compile('^[19]|^[0][19]')
     if re.search(pattern_mobile, phone) is not None and len(phone) in [9,10,11]:
@@ -132,30 +141,25 @@ def classify_fixedphone_mobiphone(phone):
 def apply_clean_phone_number(row,name_column):
     # row = '07103/839008 / 0909363692 071 03766669'
     # remove các kí tự không phải là số, ngoại trừ 2 trường hợp dau / va dau space dau -
-    # pattern_number = re.compile('[^0-9/ EXT()]', re.IGNORECASE)
-    # row = '84 9 04117727'
     pattern_number = re.compile('[^0-9/ -]', re.IGNORECASE) # remove luôn cả chữ ext và dấu đóng mở ngoặc
     row = re.sub(pattern_number,"",str(row))
+    #check truong hợp trước khi split mà được sdt thì ta sẽ ưu tiên remove  nó trước
+    #những exception cần làm
+    #TH1 : '84-093-5020977'. kiểm tra xem có dấu - này, nếu có thử
+
+
     #thi thoang co doan can split = space, xem xet lai doan code.
     #split = dau / hoac dau space ( dau cach), dấu -
-
     list_number  = [numb for numb in re.split('/| |-',row) if len(numb)>0]
     dict_phone = defaultdict(list)
     for i, number in enumerate(list_number):
         # number ='84939800227'
-        # lam sach sdt, them so 0 vao dau, hoặc thay thế 84 = số 0
-        if re.search(re.compile('^84'), number) is not None:
-            number = number.replace('84', '0', 1)
-            # nếu có nhiều hơn 1 số 0 ở đầu, thì sẽ replace nó
-            number = re.sub(re.compile('^00+'), "0", str(number))
-            # number = number.replace('84', '0', 1)
-        # add so 0 vào đầu
-        if re.search(re.compile('^0'), number) is None:
-            number = '0' + number  # removw list cu bangf phan tu nayd
+        # ưu tiên trường hợp gộp trước khi split
+
         # do 1 sdt co the vua split bằng / hoặc space, nên ta sẽ chỉ áp dụng split nếu kết quả sau khi split là 1 số cố định hoặc 1 số điện thoại, nếu không ta sẽ gộp 2 kết quả split lại, thử xem nó có là số điện thoại hay không
-        if classify_fixedphone_mobiphone(number) != 'other':
-            dict_phone[classify_fixedphone_mobiphone(number)].append(number)
-        elif i>0 and classify_fixedphone_mobiphone(list_number[i-1] + list_number[i]) != 'other': # check điều kiện i>0 để loại trường hợp phần tử 0 kết hợp với phần tử -1
+        # if classify_fixedphone_mobiphone(number) != 'other':
+        #     dict_phone[classify_fixedphone_mobiphone(number)].append(number)
+        if i>0 and classify_fixedphone_mobiphone(list_number[i-1] + list_number[i]) != 'other': # check điều kiện i>0 để loại trường hợp phần tử 0 kết hợp với phần tử -1
             dict_phone[classify_fixedphone_mobiphone(list_number[i-1] + list_number[i])].append(list_number[i-1] + list_number[i])
         elif i>1 and classify_fixedphone_mobiphone(list_number[i-2]+list_number[i-1] + list_number[i]) != 'other': # check điều kiện i>1 để loại trường hợp phần tử 0 kết hợp với phần tử -1
             dict_phone[classify_fixedphone_mobiphone(list_number[i-2]+list_number[i-1] + list_number[i])].append(list_number[i-2]+list_number[i-1] + list_number[i])
@@ -163,11 +167,14 @@ def apply_clean_phone_number(row,name_column):
             i]) != 'other':  # check điều kiện i>1 để loại trường hợp phần tử 0 kết hợp với phần tử -1
             dict_phone[classify_fixedphone_mobiphone(list_number[i - 3]+list_number[i - 2] + list_number[i - 1] + list_number[i])].append(
                 list_number[i - 3]+ list_number[i - 2] + list_number[i - 1] + list_number[i])
+        elif classify_fixedphone_mobiphone(number) != 'other':
+            dict_phone[classify_fixedphone_mobiphone(number)].append(number)
         else:
             pass
     for key, value in dict_phone.items():
         dict_phone[key] = ','.join(value) if len(value) > 0 else None
     return dict_phone[name_column] if len(dict_phone[name_column]) >0 else None
+
 
 def apply_add_number_0(number):
     if re.search(re.compile('^0'), str(number)) is None:
@@ -203,13 +210,13 @@ def create_dict_phone():
     return dict_phone
 
 
-def clean_phone_number():
+def clean_phone_number(input = r'C:\nam\work\learn_tensorflow\credit\output\2015-2017\the_tin_dung\clean\thong tin nhan dang the.xlsx', output = r'C:\nam\work\learn_tensorflow\credit\output\2015-2017\the_tin_dung\clean\clean_2308_sdt_the.xlsx'):
     # tim dict map ma cung va tinh
 
     dict_phone = pickle.load(open(r'C:\nam\work\learn_tensorflow\dict_phone.pickle','rb'))
 
     # lam sach gia tri
-    df = pd.read_excel(r'C:\nam\work\learn_tensorflow\credit\output\2015-2017\the_tin_dung\clean\thong tin nhan dang the.xlsx')
+    df = pd.read_excel(input)
     # df = pd.read_excel(r'C:\nam\work\learn_tensorflow\credit\clean_sdt20_07.xlsx')
     # columns = ['cic_id', 'quoc_tich', 'cmnd', 'name', 'filename','header', 'no_number', 'time_query', 'number','address']
     columns = ['cic_id', 'cmnd', 'name', 'filename','header', 'no_number', 'time_query', 'number','address']
@@ -221,8 +228,8 @@ def clean_phone_number():
     df['other'] = df['number'].apply(apply_clean_phone_number, args=('other',))
     df['ma_vung'] = df['fixed_phone'].apply(apply_map_pattern, args = (dict_phone,))
 
-    nam_to_excel(df, 'clean_2308_sdt.xlsx')
-    nam_to_excel(df, r'C:\nam\work\learn_tensorflow\credit\output\2015-2017\the_tin_dung\clean\clean_2308_sdt_the.xlsx')
+    # nam_to_excel(df, 'clean_2308_sdt.xlsx')
+    nam_to_excel(df,output )
 
 def apply_status_card(row):
     patter_inactive = re.compile('dong the|đóng thẻ|dong thẻ|đong the|the', re.IGNORECASE|re.UNICODE)
@@ -313,6 +320,10 @@ if __name__ == '__main__':
     # clean_date()
     # clean_phone_number()
     # apply_clean_phone_number('0975-503-170','1')
-    clean_phone_number()
+    # clean_phone_number()
+    clean_phone_number(
+        input=r'C:\nam\work\learn_tensorflow\credit\output\2015-2017\the_tin_dung\clean\thong tin nhan dang the.xlsx',
+        output=r'C:\nam\work\learn_tensorflow\credit\output\2015-2017\the_tin_dung\clean\clean_2308_sdt_the_ver2.xlsx')
+
 
 
