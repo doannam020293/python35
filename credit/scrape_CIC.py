@@ -22,6 +22,92 @@ import requests
 from nam_basic import nam_to_excel, split_list_to_N_equal_element, create_connect_to_mongo, create_log_file
 # import collections
 
+def clean_change_key(doc,case = 'the_tin_dung'):
+
+    '''vẫn cần phải strip các key để có thể dùng được nếu key không nằm trong list trên '''
+    change_the_tin_dung = (
+        ('Thông tin nhận dạng','thong_tin_nhan_dang'),
+        ('Thông tin về tổ chức phát hành thẻ','thong_tin_to_chuc_phat_hanh_the'),
+        ('Thông tin tài sản đảm bảo','thong_tin_tsdb'),
+        ('Thông tin tài sản','thong_tin_tsdb'),
+        ('Diễn biến dư nợ 12 tháng gần nhất','dien_bien_du_no_12_thang'),
+        ('Thông tin về số tiền thanh toán thẻ của chủ thẻ','thong_tin_so_tien_thanh_toan_chu_the'),
+        ('Thông tin về số tiền phải thanh toán thẻ của chủ thẻ','thong_tin_so_tien_thanh_toan_chu_the'),
+        ('Thông tin về số tiền thanh toán thẻ của chủ thẻ','thong_tin_so_tien_thanh_toan_chu_the'),
+        ('Tổng hợp dư nợ hiện tại','tong_hop_du_no_hien_tai'),
+        ('Danh sách Tổ chức tín dụng đang quan hệ','danh_sach_TCTD_da_quan_he'),
+        ('Danh sách Tổ chức tín dụng đã từng quan hệ','danh_sach_TCTD_da_quan_he'),
+        ('Từ 15/8/2013 về trước','lich_su_cham_thanh_toan_truoc_2013'),
+        ('Từ 15/8/2013 đến nay','lich_su_cham_thanh_toan_sau_2013'),
+        ('Từ 15/8/2013 đến nay','lich_su_cham_thanh_toan_sau_2013'), # 2 chữ đ khác nhau
+        ('Lịch sử chậm thanh toán thẻ của chủ thẻ','lich_su_cham_thanh_toan'),
+        ('Tình hình thanh toán thẻ của chủ thẻ','tinh_hinh_cham_thanh_toan'),
+        ('VAMC','du_no_VAMC'),
+        ('Diễn biến dư nợ 12 tháng gần nhất','dien_bien_du_no_12_thang'),
+        ('Lịch sử nợ xấu tín dụng trong 03 năm gần nhất','lich_su_no_xau_3_nam'),
+        ('Nợ cần chú ý trong vòng 12 tháng gần nhất','no_can_chu_y_12_thang'),
+        ('TÌNH HÌNH THANH TOÁN CỦA CHỦ THẺ','tinh_hinh_thanh_toan_chu_the')
+    )
+    #xu ly thong tin phan 1
+    regex_thong_tin_nhan_dang = 'Thông tin nhận dạng'
+    chamge_thong_tin_nhan_dang = (
+        ('Tên khách hàng','name'),
+        ('CIC','cic_id'),
+        ('iện thoại','phone_number'),
+        ('ịa chỉ','address'),
+        ('CMND','CMND'),
+        ('chứng minh nhân dân','CMND'),
+    )
+    #xu ly phan thong tin 3
+    regex_3 = re.compile('TỔNG DƯ NỢ TÍN DỤNG CỦA CHỦ THẺ')
+    new_key_3 = 'tong_du_no_tin_dung'
+    # phần báo cáo vay;
+    change_vay = (('THÔNG TIN CHUNG VỀ KHÁCH HÀNG','thong_tin_nhan_dang'),
+                  ('Tổng hợp dư nợ hiện tại','tong_hop_du_no_hien_tai'),
+                  ('Danh sách Tổ chức tín dụng đang quan hệ','danh_sach_TCTD_quan_he'),
+                  ('Chi tiết về nợ vay (không bao gồm nợ thẻ tín dụng)','chi_tiet_vay_no'),
+                  ('Tình trạng dư nợ tín dụng hiện tại','chi_tiet_vay_no'),
+                  ('Thông tin Thẻ tín dụng và dư nợ thẻ tín dụng','thong_tin_the_tin_dung'),
+                  ('Lịch sử nợ xấu 5 năm gần nhất','lich_su_no_nau_5_nam'),
+                  ('VAMC','du_no_thuoc_VAMC'),
+                  ('Nợ cần chú ý trong vòng 12 tháng gần nhất','no_can_chu_y_trong_12_thang'),
+                  ('Lịch sử nợ xấu tín dụng trong 05 năm gần nhất','lich_su_no_xau_5_nam'),
+                  ('Lịch sử chậm thanh toán thẻ tín dụng trong 03 năm gần nhất','lich_su_cham_thanh_toan_3_nam'),
+                  ('DANH SÁCH TCTD TRA CỨU THÔNG TIN QUAN HỆ TÍN DỤNG CỦA KHÁCH HÀNG (trong 1 năm gần nhất)','danh_sach_tctd_tra_cuu'),
+                  ('Thông tin về tài sản đảm bảo','thong_tin_tsdb'),
+                  ('Thông tin về hợp đồng tín dụng','thong_tin_hop_dong_tin_dung'),
+                  )
+    for key in doc.keys():
+        if case =='vay':
+            for old_value, new_value in change_vay:
+                if re.search(old_value,key) is not None:
+                    doc[new_value] = doc.pop(key)
+                    break
+        elif case =='the_tin_dung':
+            for old_value, new_value in change_the_tin_dung:
+                #lam sach dữ liệu của thông tin nhân dạng
+                if re.search(regex_thong_tin_nhan_dang,key) is not None:
+                    if isinstance(doc[key],list):
+                        thong_tin = doc[key][0]
+                    if isinstance(doc[key],dict):
+                        thong_tin = doc[key]
+                    for key1 in thong_tin.keys():
+                        for old_value1, new_value1 in chamge_thong_tin_nhan_dang:
+                            if re.search(old_value1, key1) is not None:
+                                thong_tin[new_value1] = thong_tin.pop(key1)
+                                doc[key] = thong_tin
+                if re.search(old_value,key) is not None:
+                    doc[new_value] = doc.pop(key)
+                    break
+                if re.search(regex_3, key) is not None:
+                    value = key.split(':')[-1]
+                    vnd = value.split(';')[0]
+                    usd = value.split(';')[-1]
+                    value_update = dict({'vnd': vnd, 'usd': usd})
+                    doc[new_key_3] = value_update
+                    doc.pop(key)
+                    break
+    return doc
 
 class html_tables(object):
     def __init__(self, source):
@@ -223,6 +309,7 @@ class html_tables(object):
                 table = table.iloc[1:,:]  # take the data less the header row
                 table.rename(columns=new_header, inplace=True)
             if remove_na == True:
+                # table = table.dropna().copy()
                 table.dropna(inplace=True)
         else:
             table = None
@@ -236,9 +323,10 @@ class html_tables(object):
         except ValueError:
             # check header co bi None hay khong, neu None thi dien gia tri: la  1 số random để tránh trường hợp 2 column None thì k bị trùng tên
             column = pd.DataFrame(table.columns)
-            # column = pd.DataFrame([1,2,np.NaN,np.NaN])
-            new_size = np.array([np.array(column[pd.isnull(column[0])].size),1])
-            column[pd.isnull(column[0])] = np.random.randint(0, 2000, size=new_size)
+            new_size = column[pd.isnull(column[0])].size
+            random_list = np.random.randint(0, 2000, size=new_size)
+            random_list1 = np.array(list(map(str, random_list))).reshape(new_size,-1)
+            column[pd.isnull(column[0])] = random_list1
             # column = pd.DataFrame(table.columns).fillna(value= np.random.randint(1,10000.1))
             column_fill_na = column.values.reshape(table.shape[1])
             table = pd.DataFrame(table, columns=column_fill_na)
@@ -351,7 +439,7 @@ def find_table_between_index(soup, index_next, index_previous=None):
 
 
 
-def get_index_tag(soup):
+def get_index_tag(soup,full_filename):
     """
     idea : lấy ra những index của 1 file bằng các tìm những class là bolder trong khai bao internal CSS.  Sau đó kiểm tra việc lấy những index này có thiếu index nào không. 
     :param soup: 
@@ -366,31 +454,39 @@ def get_index_tag(soup):
     # tạo regex những class là bold
     regex_bold_class = re.compile('|'.join(list_bold_tag))
     # tìm structure của file
+    #
+
+    # case ngoai lệ
     # regex kiểu 1.1, 1.2, II, I, V,...
-    index_regex = re.compile('[1-9]\.[1-9]*|(IX\.|IV\.|V?I{0,3}\.)')
+    # index_regex = re.compile('[1-9]\.[1-9]*|(IX\.|IV\.|V?I{0,3}\.)')
+    # đang thêm 1 ngoại lệ của chi tiết lịch sử chậm thanh toán
+    index_regex = re.compile('[1-9]\.[1-9]*|(IX\.|IV\.|V?I{0,3}\.)|Chi tiết lịch sử chậm thanh toán')
     level_regex = re.compile('[1-9]\.[1-9]*')
+
+    # đang bỏ đi phần bắt đầu bằng các số thứ tự
+    # index_tags =  soup.find_all(attrs={'class': regex_bold_class})
     index_tags =  soup.find_all(text=index_regex ,attrs={'class': regex_bold_class})
 
     #check xem co thieu index nao khong
-    index_tags_text = [a.get_text().strip() for a in index_tags]
-    # đoạn này ta đang bỏ số la mã và chứ số A,B
-    index_list_raw = [re.search(level_regex, a).group() for a in index_tags_text if re.search(level_regex, a) is not None]
-    index_list = [Index_doc(a) for a in index_list_raw]
-    index_list.sort()
-    a = 'check index cho list sau: {}'.format(index_list)
-    b = "voi raw index cua file la: {}".format(index_tags_text)
-    logger.debug(b)
-    logger.debug(a)
-    index_list.sort()
-    for i in range(len(index_list)):
-        if i >=1:
-            check = (index_list[i] -index_list[i-1])
-            if check !=1:
-                a  = 'thieu index giua 2 index sau: {} va {} cua file name: {}'.format(index_list[i],index_list[i-1],full_filename)
-                logger.debug(a)
-                print(a)
-            else:
-                logger.debug('chuan')
+    # index_tags_text = [a.get_text().strip() for a in index_tags]
+    # # đoạn này ta đang bỏ số la mã và chứ số A,B
+    # index_list_raw = [re.search(level_regex, a).group() for a in index_tags_text if re.search(level_regex, a) is not None]
+    # index_list = [Index_doc(a) for a in index_list_raw]
+    # index_list.sort()
+    # a = 'check index cho list sau: {}'.format(index_list)
+    # b = "voi raw index cua file la: {}".format(index_tags_text)
+    # logger.debug(b)
+    # logger.debug(a)
+    # index_list.sort()
+    # for i in range(len(index_list)):
+    #     if i >=1:
+    #         check = (index_list[i] -index_list[i-1])
+    #         if check !=1:
+    #             a  = 'thieu index giua 2 index sau: {} va {} cua file name: {}'.format(index_list[i],index_list[i-1],full_filename)
+    #             logger.debug(a)
+    #             print(a)
+    #         else:
+    #             logger.debug('chuan')
     return index_tags
 
 def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collection_name='vay'):
@@ -401,13 +497,14 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
 
     #connect mongo
     db_cic = create_connect_to_mongo(locahost=True,database='cic')
-    collection_name = 'the_tin_dung'
     coll_the = db_cic[collection_name]
-    coll_the.remove({})
+    # coll_the.remove({})
     #  khai báo  regex cho những table cần lấy thông tin
         # regex cho the
     regex_thong_tin_nhan_dang_card = re.compile("thông tin nhận dạng|1\.1")
     regex_table12_card = re.compile('1\.2')
+    #case này có 2 table trong 1 index 2.2
+    regex_table22_card = re.compile('Lịch sử chậm thanh toán thẻ của chủ thẻ')
         # regex cho Vay
     regex_thong_tin_nhan_dang_vay = re.compile("THÔNG TIN CHUNG VỀ KHÁCH HÀNG")
     regex_table23_vay = re.compile('Chi tiết về nợ vay (không bao gồm nợ thẻ tín dụng)|Chi tiết về nợ vay|Tình trạng dư nợ tín dụng hiện tại')
@@ -420,7 +517,7 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
     # for full_filename in list_file:
     #     try:
     input_db = dict()
-    full_filename = r'C:\nam\work\learn_tensorflow\credit\output\pickle\8\179068.html'
+    full_filename = r'C:\Users\Windows 10 TIMT\OneDrive\Nam\OneDrive - Five9 Vietnam Corporation\work\data_input\credit\input 2014 redit\thong_tin_the\100904.html'
     with open(full_filename, encoding='utf-8') as file:
         soup = BeautifulSoup(file, "html.parser")
     #thông tin k nằm trong table nào
@@ -430,7 +527,7 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
         1].get_text()
     time_query = time_query.strip()
     #find structure. TÌm những header lơn của file
-    index_tags = get_index_tag(soup)
+    index_tags = get_index_tag(soup,full_filename)
     index_tags_text = [a.get_text().strip() for a in index_tags]
     # lặp giữa các index để lấy ra thông tin giữa 2 index nằm cạnh nhau
     for i in range(len(index_tags)):
@@ -449,53 +546,55 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
             tag = next_tag
 
         # kiểm tra xem có bao nhiêu table giữa các index
-        if len(tag) ==0:
+        if len(tag) == 0:
             # nếu k có table thì ta thử tìm text giữ 2
             next_tag = set(first_tag.find_all_next())
             previous_tag = set(second_tag.find_all_previous())
             tag = next_tag.intersection(previous_tag)
-            tag = [x  for x in tag if x.name not in ('th','td','tr') ]
-            text = [str(x.next_sibling) if isinstance(x, Tag) and x.name == 'br' and isinstance(x.next_sibling, NavigableString) else x.get_text() for x in tag]
-            text = [re.sub(re.compile('\+|\*|\-'),'',x) for x in text]
+            tag = [x for x in tag if x.name not in ('th', 'td', 'tr')]
+            text = [str(x.next_sibling) if isinstance(x, Tag) and x.name == 'br' and isinstance(x.next_sibling,
+                                                                                                NavigableString) else x.get_text()
+                    for x in tag]
+            text = [re.sub(re.compile('\+|\*|\-'), '', x) for x in text]
             # text = [x.get_text()  for x in tag]
             record = ' '.join(text).strip()
-        elif len(tag) ==1:
+        elif len(tag) == 1:
             df_table11 = html_tables(list(tag)[0])
             # từng loại table sẽ có cách lấy table khác nhau
-            if collection_name== 'the_tin_dung':
-                if re.search(regex_thong_tin_nhan_dang_card,key) is not None :
+            if collection_name == 'the_tin_dung':
+                if re.search(regex_thong_tin_nhan_dang_card, key) is not None:
                     # day là table 1.1
                     df_table11 = df_table11.clean_table(header='first_column', remove_na=True)
-                    #table chỉ có 1 dòng, nên ta sẽ lấy giá trị đầu tiên của nó
+                    # table chỉ có 1 dòng, nên ta sẽ lấy giá trị đầu tiên của nó
                     record = df_table11.to_dict('records')[0]
                     record['no_number'] = no_number
-                    record['header'] =header
+                    record['header'] = header
                     record['time_query'] = time_query
                     record['full_filename'] = full_filename
-                elif re.search(regex_table12_card,key) is not None:
+                elif re.search(regex_table12_card, key) is not None:
                     # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
-                    df_table11 = df_table11.clean_table( remove_na=True)
+                    df_table11 = df_table11.clean_table(remove_na=True)
                     record = df_table11.to_dict('records')
                 else:
                     df_table11 = df_table11.clean_table()
                     record = df_table11.to_dict('records')
-            if collection_name=='vay':
-                if re.search(regex_thong_tin_nhan_dang_vay,key) is not None :
+            if collection_name == 'vay':
+                if re.search(regex_thong_tin_nhan_dang_vay, key) is not None:
                     # day là table 1.1
                     df_table11 = df_table11.clean_table(header='first_column', remove_na=True)
-                    #table chỉ có 1 dòng, nên ta sẽ lấy giá trị đầu tiên của nó
+                    # table chỉ có 1 dòng, nên ta sẽ lấy giá trị đầu tiên của nó
                     record = df_table11.to_dict('records')[0]
                     record['no_number'] = no_number
-                    record['header'] =header
+                    record['header'] = header
                     record['time_query'] = time_query
                     record['full_filename'] = full_filename
-                elif re.search(regex_table23_vay,key) is not None:
+                elif re.search(regex_table23_vay, key) is not None:
                     # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
-                    df_table11 = df_table11.clean_table(case =case_table23_vay)
+                    df_table11 = df_table11.clean_table(case=case_table23_vay)
                     record = df_table11.to_dict('records')
-                elif re.search(regex_table24_vay,key) is not None:
+                elif re.search(regex_table24_vay, key) is not None:
                     # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
-                    df_table11 = df_table11.clean_table(case =case_table24_vay)
+                    df_table11 = df_table11.clean_table(case=case_table24_vay)
                     record = df_table11.to_dict('records')
                 elif re.search(regex_table21_vay, key) is not None:
                     # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
@@ -504,11 +603,16 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
                 else:
                     df_table11 = df_table11.clean_table()
                     record = df_table11.to_dict('records')
-            # record[key] = record
+                    # record[key] = record
         else:
-            #chu ý: table 2.2 của báo cáo thẻ tín dụng, có thể có 2 table, mà chưa được fix
-            # print('nhieu table tai day')
-            logger.warning('nhieu table tai day sau index: {} cua file{}'.format(key,full_filename))
+
+            # chu ý: table 2.2 của báo cáo thẻ tín dụng, có thể có 2 table, mà chưa được fix
+            # if re.search(regex_table22_card, key) is not None:
+            #
+            #
+            # # print('nhieu table tai day')
+            # else:
+            logger.warning('nhieu table tai day sau index: {} cua file{}'.format(key, full_filename))
             record = []
             for tag_item in list(tag):
                 df_table11 = html_tables(tag_item)
@@ -521,13 +625,13 @@ def import_html_to_mongodb_without_lock(list_file,lock,process_id ='1' , collect
             key = key.replace('.', '\uff0E')
             input_db[key] = record
             input_db['_id'] = full_filename
+    # sửa lại các key, và value theo các regex định nghĩa
+    input_db = clean_change_key(input_db,case = 'the_tin_dung')
     # with lock:
-    # trước khi insert thì cần làm sạch  lại các key, của dictionary
     coll_the.insert_one(input_db)
         # except Exception as error:
         #     print('error at file: (%s), chi tiet loi nhu sau: (%s)' %(full_filename,error))
         #     logger.error('error at file: (%s), chi tiet loi nhu sau: (%s)' %(full_filename,error))
-        #
 
 def import_html_to_mongodb(list_file,lock,process_id ='1' , collection_name='vay'):
     '''
@@ -550,11 +654,12 @@ def import_html_to_mongodb(list_file,lock,process_id ='1' , collection_name='vay
     # coll_the.remove({})
     #  khai báo  regex cho những table cần lấy thông tin
         # regex cho the
-    regex_thong_tin_nhan_dang = re.compile("thông tin nhận dạng|1\.1")
+    regex_thong_tin_nhan_dang_card = re.compile("thông tin nhận dạng|1\.1")
     regex_table12_card = re.compile('1\.2')
-        # table 2.2 của báo cáo thẻ tín dụng, có thể có 2 table, mà chưa được fix , dữ liệu cần lấy ra cần chú ý đoạn row span VD bảng file:///C:/Users/Windows%2010%20TIMT/OneDrive/Nam/OneDrive%20-%20Five9%20Vietnam%20Corporation/work/data_input/credit/input%202014%20redit/thong_tin_the/128888.html
+    #case này có 2 table trong 1 index 2.2
+    regex_table22_card = re.compile('Lịch sử chậm thanh toán thẻ của chủ thẻ')
         # regex cho Vay
-    regex_thong_tin_nhan_dang_vay = re.compile("THÔNG TIN CHUNG VỀ KHÁCH HÀNG|^1\.")
+    regex_thong_tin_nhan_dang_vay = re.compile("THÔNG TIN CHUNG VỀ KHÁCH HÀNG")
     regex_table23_vay = re.compile('Chi tiết về nợ vay (không bao gồm nợ thẻ tín dụng)|Chi tiết về nợ vay|Tình trạng dư nợ tín dụng hiện tại')
     case_table23_vay = 'du_no_hien_tai_BC_VAY' # giá trị argument khi đọc table html
     regex_table24_vay = re.compile('2\.4|Lịch sử nợ xấu 5 năm gần nhất')
@@ -575,7 +680,7 @@ def import_html_to_mongodb(list_file,lock,process_id ='1' , collection_name='vay
                 1].get_text()
             time_query = time_query.strip()
             #find structure. TÌm những header lơn của file
-            index_tags = get_index_tag(soup)
+            index_tags = get_index_tag(soup,full_filename)
             index_tags_text = [a.get_text().strip() for a in index_tags]
             # lặp giữa các index để lấy ra thông tin giữa 2 index nằm cạnh nhau
             for i in range(len(index_tags)):
@@ -594,48 +699,72 @@ def import_html_to_mongodb(list_file,lock,process_id ='1' , collection_name='vay
                     tag = next_tag
 
                 # kiểm tra xem có bao nhiêu table giữa các index
-                if len(tag) ==0:
+                if len(tag) == 0:
                     # nếu k có table thì ta thử tìm text giữ 2
                     next_tag = set(first_tag.find_all_next())
                     previous_tag = set(second_tag.find_all_previous())
                     tag = next_tag.intersection(previous_tag)
-                    text = [x.get_text() for x in tag]
+                    tag = [x for x in tag if x.name not in ('th', 'td', 'tr')]
+                    text = [str(x.next_sibling) if isinstance(x, Tag) and x.name == 'br' and isinstance(x.next_sibling,
+                                                                                                        NavigableString) else x.get_text()
+                            for x in tag]
+                    text = [re.sub(re.compile('\+|\*|\-'), '', x) for x in text]
+                    # text = [x.get_text()  for x in tag]
                     record = ' '.join(text).strip()
-                elif len(tag) ==1:
+                elif len(tag) == 1:
                     df_table11 = html_tables(list(tag)[0])
                     # từng loại table sẽ có cách lấy table khác nhau
-                    if re.search(regex_thong_tin_nhan_dang,key) is not None or  re.search(regex_thong_tin_nhan_dang_vay,key) is not None:
-                        # day là table 1.1
-                        df_table11 = df_table11.clean_table(header='first_column', remove_na=True)
-                        #table chỉ có 1 dòng, nên ta sẽ lấy giá trị đầu tiên của nó
-                        record = df_table11.to_dict('records')[0]
-                        record['no_number'] = no_number
-                        record['header'] =header
-                        record['time_query'] = time_query
-                        record['full_filename'] = full_filename
-                    elif re.search(regex_table12_card,key) is not None:
-                        # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
-                        df_table11 = df_table11.clean_table( remove_na=True)
-                        record = df_table11.to_dict('records')
-                    elif re.search(regex_table23_vay,key) is not None:
-                        # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
-                        df_table11 = df_table11.clean_table(case =case_table23_vay)
-                        record = df_table11.to_dict('records')
-                    elif re.search(regex_table24_vay,key) is not None:
-                        # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
-                        df_table11 = df_table11.clean_table(case =case_table24_vay)
-                        record = df_table11.to_dict('records')
-                    elif re.search(regex_table21_vay, key) is not None:
-                        # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
-                        df_table11 = df_table11.clean_table(case=case_table21_vay)
-                        record = df_table11.to_dict('records')
-                    else:
-                        df_table11 = df_table11.clean_table()
-                        record = df_table11.to_dict('records')
-                    # record[key] = record
+                    if collection_name == 'the_tin_dung':
+                        if re.search(regex_thong_tin_nhan_dang_card, key) is not None:
+                            # day là table 1.1
+                            df_table11 = df_table11.clean_table(header='first_column', remove_na=True)
+                            # table chỉ có 1 dòng, nên ta sẽ lấy giá trị đầu tiên của nó
+                            record = df_table11.to_dict('records')[0]
+                            record['no_number'] = no_number
+                            record['header'] = header
+                            record['time_query'] = time_query
+                            record['full_filename'] = full_filename
+                        elif re.search(regex_table12_card, key) is not None:
+                            # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
+                            df_table11 = df_table11.clean_table(remove_na=True)
+                            record = df_table11.to_dict('records')
+                        else:
+                            df_table11 = df_table11.clean_table()
+                            record = df_table11.to_dict('records')
+                    if collection_name == 'vay':
+                        if re.search(regex_thong_tin_nhan_dang_vay, key) is not None:
+                            # day là table 1.1
+                            df_table11 = df_table11.clean_table(header='first_column', remove_na=True)
+                            # table chỉ có 1 dòng, nên ta sẽ lấy giá trị đầu tiên của nó
+                            record = df_table11.to_dict('records')[0]
+                            record['no_number'] = no_number
+                            record['header'] = header
+                            record['time_query'] = time_query
+                            record['full_filename'] = full_filename
+                        elif re.search(regex_table23_vay, key) is not None:
+                            # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
+                            df_table11 = df_table11.clean_table(case=case_table23_vay)
+                            record = df_table11.to_dict('records')
+                        elif re.search(regex_table24_vay, key) is not None:
+                            # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
+                            df_table11 = df_table11.clean_table(case=case_table24_vay)
+                            record = df_table11.to_dict('records')
+                        elif re.search(regex_table21_vay, key) is not None:
+                            # với table 12 này ta sẽ remove NAN sau khi đã transpose lại  table
+                            df_table11 = df_table11.clean_table(case=case_table21_vay)
+                            record = df_table11.to_dict('records')
+                        else:
+                            df_table11 = df_table11.clean_table()
+                            record = df_table11.to_dict('records')
+                            # record[key] = record
                 else:
-                    #chu ý: table 2.2 của báo cáo thẻ tín dụng, có thể có 2 table, mà chưa được fix
-                    # print('nhieu table tai day')
+
+                    # chu ý: table 2.2 của báo cáo thẻ tín dụng, có thể có 2 table, mà chưa được fix
+                    # if re.search(regex_table22_card, key) is not None:
+                    #
+                    #
+                    # # print('nhieu table tai day')
+                    # else:
                     logger.warning('nhieu table tai day sau index: {} cua file{}'.format(key, full_filename))
                     record = []
                     for tag_item in list(tag):
@@ -649,75 +778,17 @@ def import_html_to_mongodb(list_file,lock,process_id ='1' , collection_name='vay
                     key = key.replace('.', '\uff0E')
                     input_db[key] = record
                     input_db['_id'] = full_filename
-
-                '''
-                các key phải được làm sạch lại = ' '.join và strip để đảm bảo k khác nhau bởi dấu  cách '''
+            # sửa lại các key, và value theo các regex định nghĩa
+            input_db = clean_change_key(input_db,case = 'the_tin_dung')
             with lock:
                 coll_the.insert_one(input_db)
         except Exception as error:
             print('error at file: (%s), chi tiet loi nhu sau: (%s)' %(full_filename,error))
             logger.error('error at file: (%s), chi tiet loi nhu sau: (%s)' %(full_filename,error))
 
-def clean_change_key(doc):
 
-    change_the_tin_dung = (
-        ('Thông tin nhận dạng','thong_tin_nhan_dang'),
-        ('Thông tin về tổ chức phát hành thẻ','thong_tin_to_chuc_phat_hanh_the'),
-        ('Thông tin tài sản đảm bảo','thong_tin_tsdb'),
-        ('Diễn biến dư nợ 12 tháng gần nhất','dien_bien_du_no_12_thang'),
-        ('Thông tin về số tiền thanh toán thẻ của chủ thẻ','2_1_thong_tin_so_tien_thanh_toan_chu_the'),
-        ('Tổng hợp dư nợ hiện tại','tong_hop_du_no_hien_tai'),
-        ('Danh sách Tổ chức tín dụng đang quan hệ','danh_sach_TCTD_da_quan_he'),
-        ('Danh sách Tổ chức tín dụng đã từng quan hệ','danh_sach_TCTD_da_quan_he'),
-        ('Từ 15/8/2013 về trước','lich_su_cham_thanh_toan_truoc_2013'),
-        ('Từ 15/8/2013 đến nay','lich_su_cham_thanh_toan_sau_2013'),
-                           )
-    the_tin_dung_xoa = (
-        ('Lịch sử chậm thanh toán thẻ của chủ thẻ','lich_su_cham_thanh_toan'),
-        ('Tình hình thanh toán thẻ của chủ thẻ','tinh_hinh_cham_thanh_toan'),
-        ('VAMC','du_no_VAMC'),
-        ('Diễn biến dư nợ 12 tháng gần nhất','dien_bien_du_no_12_thang'),
-        ('Lịch sử nợ xấu tín dụng trong 03 năm gần nhất','lich_su_no_xau_3_nam')
-        ('Nợ cần chú ý trong vòng 12 tháng gần nhất','no_can_chu_y_12_thang')
-        ('TÌNH HÌNH THANH TOÁN CỦA CHỦ THẺ','tinh_hinh_thanh_toan_chu_the')
-    )
-    correct_key_3_tong_du_no_tin_dung(coll_the)
-
-    # phần báo cáo vay;
-    change_vay = (('THÔNG TIN CHUNG VỀ KHÁCH HÀNG','thong_tin_nhan_dang'),
-                  ('Tổng hợp dư nợ hiện tại','tong_hop_du_no_hien_tai'),
-                  ('Danh sách Tổ chức tín dụng đang quan hệ','danh_sach_TCTD_quan_he'),
-                  ('Chi tiết về nợ vay (không bao gồm nợ thẻ tín dụng)','chi_tiet_vay_no'),
-                  ('Tình trạng dư nợ tín dụng hiện tại','chi_tiet_vay_no'),
-                  ('Thông tin Thẻ tín dụng và dư nợ thẻ tín dụng','thong_tin_the_tin_dung'),
-                  ('Lịch sử nợ xấu 5 năm gần nhất','lich_su_no_nau_5_nam'),
-                  ('VAMC','du_no_thuoc_VAMC'),
-                  ('Nợ cần chú ý trong vòng 12 tháng gần nhất','no_can_chu_y_trong_12_thang'),
-                  ('Lịch sử nợ xấu tín dụng trong 05 năm gần nhất','lich_su_no_xau_5_nam'),
-                  ('Lịch sử chậm thanh toán thẻ tín dụng trong 03 năm gần nhất','lich_su_cham_thanh_toan_3_nam'),
-                  ('DANH SÁCH TCTD TRA CỨU THÔNG TIN QUAN HỆ TÍN DỤNG CỦA KHÁCH HÀNG (trong 1 năm gần nhất)','danh_sach_tctd_tra_cuu'),
-                  ('Thông tin về tài sản đảm bảo','thong_tin_tsdb'),
-                  ('Thông tin về hợp đồng tín dụng','thong_tin_hop_dong_tin_dung'),
-                  )
-    for key in doc.keys():
-        for old_value, new_value in change_vay:
-            if re.search(old_value,key) is not None:
-                key = new_value
-                break
-
-    change_thong_tin_nhan_dang  = (('Mã số CIC:','cic_id'), #1_thong_tin_nhan_dang
-                                  ('chứng minh nhân dân','CMND'),#1_thong_tin_nhan_dang
-                                  ('Tên khách hàng','name_customer'),#1_thong_tin_nhan_dang
-                                  ('ịa chỉ','address'))#1_thong_tin_nhan_dang)
-
-    # # Xoa field .đa số các giá trị của 2.2 Lịch sử chậm thanh toán thẻ của chủ thẻ đều có 2 bảng sub ở trong, nên ta sẽ k cần key này nữa
-    # coll_vay.update_many({'2．1 Diễn biến dư nợ 12 tháng gần nhất':{'$exists':1}},{"$unset": {'2．1 Diễn biến dư nợ 12 tháng gần nhất': 1}})
-    # coll_vay.update_many({'2．1 Diễn biến dư nợ 12 tháng gần nhất ':{'$exists':1}},{"$unset": {'2．1 Diễn biến dư nợ 12 tháng gần nhất ': 1}})
-    # coll_vay.update_many({'2．5． Diễn biến dư nợ 12 tháng gần nhất':{'$exists':1}},{"$unset": {'2．5． Diễn biến dư nợ 12 tháng gần nhất': 1}})
-    # coll_vay.update_many({'2．5． Diễn biến dư nợ 12 tháng gần nhất ':{'$exists':1}},{"$unset": {'2．5． Diễn biến dư nợ 12 tháng gần nhất ': 1}})
 
 def run_vay2208():
-
     folder_input1 = r'C:\nam\work\learn_tensorflow\credit\output\pickle\6'
     list_vay = [os.path.join(folder_input1,file) for file in os.listdir(folder_input1)]
     # num = Value('i', 0)
@@ -732,9 +803,106 @@ def run_vay2208():
         proc.join()
 
 
+def run_TTD2908():
+    # global logger
+    # N = len(list_vay)
+    folder_input1 = r'C:\nam\work\learn_tensorflow\credit\output\pickle\0'
+    folder_input2 = r'C:\nam\work\learn_tensorflow\credit\output\pickle\2'
+    folder_input3 = r'C:\nam\work\learn_tensorflow\credit\output\pickle\8'
+    folder_input4 = r'C:\Users\Windows 10 TIMT\OneDrive\Nam\OneDrive - Five9 Vietnam Corporation\work\data_input\credit\input 2014 redit\thong_tin_the'
+    folder_input5 = r'C:\nam\work\learn_tensorflow\credit\output\pickle\10'
+    list_vay1 = [os.path.join(folder_input1,file) for file in os.listdir(folder_input1)]
+    list_vay2 = [os.path.join(folder_input2,file) for file in os.listdir(folder_input2)]
+    list_vay3 = [os.path.join(folder_input3,file) for file in os.listdir(folder_input3)]
+    list_vay4 = [os.path.join(folder_input4,file) for file in os.listdir(folder_input4)]
+    list_vay5 = [os.path.join(folder_input5,file) for file in os.listdir(folder_input5)]
+    list_vay = list_vay1 +list_vay2+list_vay3 +list_vay4 +list_vay5
+    # list_vay = list_vay4
+    lock = Lock()
+    collection_name = 'the_tin_dung'
+    processes = [Process(target=import_html_to_mongodb, args=(list_file,lock,i,collection_name)) for i,list_file in enumerate(split_list_to_N_equal_element(list_vay,5))]
+
+    for proc in processes:
+        proc.start()
+    for proc in processes:
+        proc.join()
+
+
+
+def check_header():
+    #check lại order cho
+
+    # path = r'C:\nam\work\learn_tensorflow\credit\output\pickle'
+    path = r'C:\Users\Windows 10 TIMT\OneDrive\Nam\OneDrive - Five9 Vietnam Corporation\work\data_input\credit\input 2014 redit'
+    header_full = defaultdict(list)
+    list_vay4 = [os.path.join(root, name)
+                 for root, dirs, files in os.walk(path)
+                 for name in files
+                 if name.endswith(".html")]
+    for full_filename in list_vay4:
+        try:
+            with open(full_filename, encoding='utf-8') as file:
+                soup = BeautifulSoup(file, "html.parser")
+            header = soup.find('span', attrs={'class': 'headerfont'}).text
+            a = soup.find('span', attrs={'class': 'headerfont'})
+            header = a.parent.text
+            header_full[header].append(full_filename)
+        except Exception as e:
+            print('loi xay ra tai file: ({}), chi tiet loi nhu sau:({})'.format(full_filename,e))
+    with open(r'C:\nam\work\learn_tensorflow\credit\output\pickle\header_full_2014.pickle','wb') as f:
+        pickle.dump(header_full,f)
+
+    with open(r'C:\nam\work\learn_tensorflow\credit\output\pickle\header_full_2014.pickle','rb') as f:
+        header_full = pickle.load(f)
+    new_dict = dict()
+    for key in header_full.keys():
+        new_dict[key] = len(header_full[key])
+
+def move_file():
+    # move các file chưa đúng header sang folder mới
+    path = r'C:\nam\work\learn_tensorflow\credit\output\pickle\10'
+    with open(r'C:\nam\work\learn_tensorflow\credit\output\pickle\header_other.pickle','rb') as f:
+        header_full = pickle.load(f)
+    x = header_full['BÁO CÁO THÔNG TIN THẺ TÍN DỤNG (Khách hàng là Thể nhân)  '] +header_full['BÁO CÁO THÔNG TIN THẺ TÍN DỤNG (Khách hàng Thể nhân) ']
+    for value in x:
+        file_name = value.split('\\')[-1]
+        directory1 = os.path.join(path,file_name)
+        os.rename(value, directory1)
+
+def check_sum():
+    #connect mongo
+    db_cic = create_connect_to_mongo(locahost=True,database='cic')
+    coll_the = db_cic['the_tin_dung_clean']
+    query = coll_the.find({},{'_id':1})
+    x = list()
+    for a in query:
+        x.append(a['_id'])
+    with open(r'C:\nam\work\learn_tensorflow\credit\output\pickle\the_all_id.pickle','wb') as f:
+        pickle.dump(header_full,f)
+    with open(r'C:\nam\work\learn_tensorflow\credit\output\pickle\header_full.pickle','rb') as f:
+        header_full = pickle.load(f)
+    list_file = header_full['BÁO CÁO THÔNG TIN THẺ TÍN DỤNG (Khách hàng Thể nhân) '] + header_full['BÁO CÁO THÔNG TIN THẺ TÍN DỤNG (Khách hàng là Thể nhân)  '] + header_full['BÁO CÁO THÔNG TIN THẺ TÍN DỤNG CÁ NHÂN  ']
+
+    path = r'C:\Users\Windows 10 TIMT\OneDrive\Nam\OneDrive - Five9 Vietnam Corporation\work\data_input\credit\input 2014 redit\thong_tin_the'
+    list_vay4 = [os.path.join(root, name)
+                 for root, dirs, files in os.walk(path)
+                 for name in files
+                 if name.endswith(".html")]
+    x_mongo = list_vay4 + x
+    other = [x for x in list_file if x not in x_mongo]
+
+
 
 if __name__ == '__main__':
-    # import_html_to_mongodb_without_lock(1, 1, process_id='1', collection_name='vay')
-    # run_vay2208()
-    import_html_to_mongodb_without_lock(1,1)
 
+    # run_TTD2908()
+    # import_html_to_mongodb_without_lock(1,1)
+    # check_header()
+    # run_TTD2908()
+    # db_cic = create_connect_to_mongo(locahost=True,database='cic')
+    # coll_the = db_cic['the_tin_dung_clean']
+    # a = coll_the.find_one({'1．2． Thông tin về tổ chức phát hành thẻ ':{'$exists':1}})
+    # b = clean_change_key(a)
+    # b = clean_change_key(a)
+    # check_header()
+    check_header()

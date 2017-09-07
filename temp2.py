@@ -1,15 +1,16 @@
 from pymongo import MongoClient
 from bson.code import Code
-from nam_basic import create_connect_to_mongo,nam_to_excel
+from nam_basic import create_connect_to_mongo, nam_to_excel
 import pandas as pd
 import re
 from bson.son import SON
 import datetime
 from collections import defaultdict
 
-def check_unique_key(coll,name_parent_key =None):
+
+def check_unique_key(coll, name_parent_key=None):
     '''
-    
+
     :param name_parent_key  ( nếu chỉ định name_parent_key thì sẽ tìm distinct sub key trong parent key đó ( nếu k chỉ định thì ta sẽ tìm distinct key của collection đó 
     :param coll: collection  
     :return: cho 1 parent key, tim all unique nested key trong key do  
@@ -18,22 +19,22 @@ def check_unique_key(coll,name_parent_key =None):
     if name_parent_key is not None:
         # name_parent_key = '2_2_danh_sach_TCTD_da_quan_he'
         # coll = coll_the
-        #check value cua parent_key là list(array) hay dict(object), nếu là array thì ta sẽ lấy dict(object) đầu tiên, sau đó sẽ tìm các key của dict(object) này
-        first_doc = coll.find_one({name_parent_key: {'$exists':1}})[name_parent_key]
-        if isinstance(first_doc,dict):
+        # check value cua parent_key là list(array) hay dict(object), nếu là array thì ta sẽ lấy dict(object) đầu tiên, sau đó sẽ tìm các key của dict(object) này
+        first_doc = coll.find_one({name_parent_key: {'$exists': 1}})[name_parent_key]
+        if isinstance(first_doc, dict):
             string_code = '''
                     function() {
                               for (var key in this['%s']) { emit(key, null); }
                            }
-            '''%(name_parent_key)
+            ''' % (name_parent_key)
             mapper = Code(string_code)
-        elif isinstance(first_doc,list):
+        elif isinstance(first_doc, list):
             string_code = '''
                     function() {
                             var a = this['%s']
                             for (var key in a) {for (var key1 in a[key]) {emit(key1, null);}}
                            }
-            '''%(name_parent_key)
+            ''' % (name_parent_key)
             mapper = Code(string_code)
             # mapper1 = Code(string_code1)
         else:
@@ -45,14 +46,13 @@ def check_unique_key(coll,name_parent_key =None):
                        }
         """)
 
-
     reducer = Code("""
         function(key, stuff) { return null; }
     """)
 
     distinctThingFields = coll.map_reduce(mapper, reducer
-        , out = {'inline' : 1}
-        , full_response = True)
+                                          , out={'inline': 1}
+                                          , full_response=True)
     list_distinct_field = [a['_id'] for a in distinctThingFields['results']]
     return list_distinct_field
 
@@ -73,6 +73,7 @@ def classify_fixedphone_mobiphone(phone):
     else:
         phone_classification = 'other'
     return phone_classification
+
 
 def apply_clean_phone_number(row):
     # row = '07103/839008 / 0909363692 071 03766669'
@@ -120,6 +121,8 @@ def apply_clean_phone_number(row):
     # for key, value in dict_phone.items():
     #     dict_phone[key] = ','.join(value) if len(value) > 0 else None
     return dict_phone
+
+
 def update_key_with_regex(collection, regex_sub_key, new_key, primary_key=None, batch_number=1000):
     '''
     rename key (hoặc subkey trong trong 1 primary key nao do với trường hợp chỉ định primary_key not None) match regex    
@@ -141,7 +144,7 @@ def update_key_with_regex(collection, regex_sub_key, new_key, primary_key=None, 
         for k in doc:
             # k = '1_1_thong_tin_nhan_dang_nam_lan2'
             if primary_key is not None:
-                if re.search(primary_key,k) is not None :
+                if re.search(primary_key, k) is not None:
                     sub_doc = doc[k]
                     for sub_key in sub_doc:
                         if re.search(regex_sub_key, sub_key) is not None:
@@ -166,14 +169,15 @@ def update_key_with_regex(collection, regex_sub_key, new_key, primary_key=None, 
                 bulk = collection.initialize_ordered_bulk_op()
             except Exception as error:
                 print(error)
-    if counter % batch_number != 0: # chạy batch cho phần còn lại (mà không chia hết cho batch_number)
+    if counter % batch_number != 0:  # chạy batch cho phần còn lại (mà không chia hết cho batch_number)
         try:
             bulk.execute()
             print('update thanh cong')
         except Exception as error:
             print(error)
 
-def correct_key_3_tong_du_no_tin_dung(collection,batch_number=1000):
+
+def correct_key_3_tong_du_no_tin_dung(collection, batch_number=1000):
     # chi ap dung cho rieng thang 3
     regex = re.compile('TỔNG DƯ NỢ TÍN DỤNG CỦA CHỦ THẺ')
     new_key = '3_tong_du_no_tin_dung'
@@ -188,7 +192,7 @@ def correct_key_3_tong_du_no_tin_dung(collection,batch_number=1000):
                 value = k.split(':')[-1]
                 vnd = value.split(';')[0]
                 usd = value.split(';')[-1]
-                value_update = dict({'vnd':vnd,'usd':usd})
+                value_update = dict({'vnd': vnd, 'usd': usd})
                 print('match')
                 bulk.find({"_id": doc['_id']}).update_one({"$unset": {k: 1}, "$set": {new_key: value_update}})
                 counter += 1
@@ -208,7 +212,6 @@ def correct_key_3_tong_du_no_tin_dung(collection,batch_number=1000):
             print(error)
 
 
-
 def import_coll_to_server():
     # chuyển collection từ local lên server
     a = list(coll_the.find())
@@ -217,119 +220,91 @@ def import_coll_to_server():
     coll_the_server = serverdb['cic_the_tin_dung']
     coll_the_server.insert_many(a)
 
+
 def clean_vay_part1():
     # clean vay
-    db = create_connect_to_mongo(database='cic',locahost=True)
+    db = create_connect_to_mongo(database='cic', locahost=True)
     # query= list(db['the_tin_dung'].find())
     coll_vay = db['vay_clean']
 
     # check key
-    field_all= check_unique_key(coll_vay)
+    field_all = check_unique_key(coll_vay)
     pd.DataFrame(field_all).to_clipboard()
 
-    #rename key : 1．1． Thông tin nhận dạng => 1_1_thong_tin_nhan_dang
+    # rename key : 1．1． Thông tin nhận dạng => 1_1_thong_tin_nhan_dang
     # list_dict_
 
-    coll_vay.update_many({},{'$rename':{'1． THÔNG TIN CHUNG VỀ KHÁCH HÀNG   ':'1_thong_tin_nhan_dang'}})
-
+    coll_vay.update_many({}, {'$rename': {'1． THÔNG TIN CHUNG VỀ KHÁCH HÀNG   ': '1_thong_tin_nhan_dang'}})
 
     # get những subkey của primary key : "1_1_thong_tin_nhan_dang"
-    distinctThingFields= check_unique_key(coll_vay,'1_thong_tin_nhan_dang')
+    distinctThingFields = check_unique_key(coll_vay, '1_thong_tin_nhan_dang')
 
     # đối những subkey trong primary key 1_1_thong_tin_nhan_dang có tên gần giống nhau thành 1 tên thống nhất
-    #rename key : 1_1_thong_tin_nhan_dang.Mã số CIC: => 1_1_thong_tin_nhan_dang.Mã CIC:
-    coll_vay.update_many({},{'$rename':{'1_thong_tin_nhan_dang.Mã số CIC:':'1_thong_tin_nhan_dang.cic_id'}})
-    update_key_with_regex(collection = coll_vay , regex_sub_key = re.compile('chứng minh nhân dân'), new_key = 'phone_number', primary_key='1_thong_tin_nhan_dang')
-    update_key_with_regex(collection = coll_vay , regex_sub_key = re.compile('Tên khách hàng'), new_key = 'name_customer', primary_key='1_thong_tin_nhan_dang')
-    update_key_with_regex(coll_vay,re.compile('ịa chỉ'),'address','1_thong_tin_nhan_dang')
+    # rename key : 1_1_thong_tin_nhan_dang.Mã số CIC: => 1_1_thong_tin_nhan_dang.Mã CIC:
+    coll_vay.update_many({}, {'$rename': {'1_thong_tin_nhan_dang.Mã số CIC:': '1_thong_tin_nhan_dang.cic_id'}})
+    update_key_with_regex(collection=coll_vay, regex_sub_key=re.compile('chứng minh nhân dân'), new_key='phone_number',
+                          primary_key='1_thong_tin_nhan_dang')
+    update_key_with_regex(collection=coll_vay, regex_sub_key=re.compile('Tên khách hàng'), new_key='name_customer',
+                          primary_key='1_thong_tin_nhan_dang')
+    update_key_with_regex(coll_vay, re.compile('ịa chỉ'), 'address', '1_thong_tin_nhan_dang')
 
-    coll_vay.update_many({},{'$rename':{'2．1 Tổng hợp dư nợ hiện tại':'2_1_tong_hop_du_no_hien_tai'}})
-    coll_vay.update_many({},{'$rename':{'2．2 Danh sách Tổ chức tín dụng đang quan hệ ':'2_2_danh_sach_TCTD_quan_he'}})
-    coll_vay.update_many({},{'$rename':{'2．2 Danh sách Tổ chức tín dụng đã từng quan hệ ':'2_2_danh_sach_TCTD_quan_he'}})
-    coll_vay.update_many({},{'$rename':{'2．2．	Chi tiết về nợ vay (không bao gồm nợ thẻ tín dụng)':'2_2_chi_tiet_vay_no'}})
-    coll_vay.update_many({},{'$rename':{'2．3 Tình trạng dư nợ tín dụng hiện tại':'2_2_chi_tiet_vay_no'}})
+    coll_vay.update_many({}, {'$rename': {'2．1 Tổng hợp dư nợ hiện tại': '2_1_tong_hop_du_no_hien_tai'}})
+    coll_vay.update_many({},
+                         {'$rename': {'2．2 Danh sách Tổ chức tín dụng đang quan hệ ': '2_2_danh_sach_TCTD_quan_he'}})
+    coll_vay.update_many({},
+                         {'$rename': {'2．2 Danh sách Tổ chức tín dụng đã từng quan hệ ': '2_2_danh_sach_TCTD_quan_he'}})
+    coll_vay.update_many({}, {
+        '$rename': {'2．2．	Chi tiết về nợ vay (không bao gồm nợ thẻ tín dụng)': '2_2_chi_tiet_vay_no'}})
+    coll_vay.update_many({}, {'$rename': {'2．3 Tình trạng dư nợ tín dụng hiện tại': '2_2_chi_tiet_vay_no'}})
 
+    coll_vay.update_many({}, {
+        '$rename': {'2．3 Thông tin Thẻ tín dụng và dư nợ thẻ tín dụng': '2_3_thong_tin_the_tin_dung'}})
+    coll_vay.update_many({}, {'$rename': {' 2．4 Lịch sử nợ xấu 5 năm gần nhất ': '2_4_lich_su_no_nau_5_nam'}})
+    coll_vay.update_many({}, {'$rename': {' 2．4 Lịch sử nợ xấu 5 năm gần nhất  ': '2_4_lich_su_no_nau_5_nam'}})
+    update_key_with_regex(collection=coll_vay, regex_sub_key=re.compile('VAMC'), new_key='du_no_thuoc_VAMC')
 
-    coll_vay.update_many({},{'$rename':{'2．3 Thông tin Thẻ tín dụng và dư nợ thẻ tín dụng':'2_3_thong_tin_the_tin_dung'}})
-    coll_vay.update_many({},{'$rename':{' 2．4 Lịch sử nợ xấu 5 năm gần nhất ':'2_4_lich_su_no_nau_5_nam'}})
-    coll_vay.update_many({},{'$rename':{' 2．4 Lịch sử nợ xấu 5 năm gần nhất  ':'2_4_lich_su_no_nau_5_nam'}})
-    update_key_with_regex(collection = coll_vay , regex_sub_key = re.compile('VAMC'), new_key = 'du_no_thuoc_VAMC')
+    coll_vay.update_many({}, {
+        '$rename': {' 2．5 Nợ cần chú ý trong vòng 12 tháng gần nhất ': '2_5_no_can_chu_y_trong_12_thang'}})
+    coll_vay.update_many({}, {
+        '$rename': {' 2．5 Nợ cần chú ý trong vòng 12 tháng gần nhất  ': '2_5_no_can_chu_y_trong_12_thang'}})
 
+    coll_vay.update_many({},
+                         {'$rename': {' 2．8． Nợ cần chú ý trong vòng 12 tháng gần nhất ': '2_8_no_can_chu_y_12_thang'}})
 
-    coll_vay.update_many({},{'$rename':{' 2．5 Nợ cần chú ý trong vòng 12 tháng gần nhất ':'2_5_no_can_chu_y_trong_12_thang'}})
-    coll_vay.update_many({},{'$rename':{' 2．5 Nợ cần chú ý trong vòng 12 tháng gần nhất  ':'2_5_no_can_chu_y_trong_12_thang'}})
+    coll_vay.update_many({}, {
+        '$rename': {'  2．6．	Lịch sử nợ xấu tín dụng trong 05 năm gần nhất ': '2_6_lich_su_no_xau_5_nam'}})
+    coll_vay.update_many({}, {
+        '$rename': {' 2．6．	Lịch sử nợ xấu tín dụng trong 05 năm gần nhất ': '2_6_lich_su_no_xau_5_nam'}})
 
+    coll_vay.update_many({}, {'$rename': {
+        '2．7．	Lịch sử chậm thanh toán thẻ tín dụng trong 03 năm gần nhất': '2_7_lich_su_cham_thanh_toan_3_nam'}})
 
-    coll_vay.update_many({},{'$rename':{' 2．8． Nợ cần chú ý trong vòng 12 tháng gần nhất ':'2_8_no_can_chu_y_12_thang'}})
+    coll_vay.update_many({}, {'$rename': {
+        '3． DANH SÁCH TCTD TRA CỨU THÔNG TIN QUAN HỆ TÍN DỤNG CỦA KHÁCH HÀNG (trong 1 năm gần nhất)': '3_danh_sach_tctd_tra_cuu'}})
+    coll_vay.update_many({}, {'$rename': {
+        '3． DANH SÁCH TCTD TRA CỨU THÔNG TIN QUAN HỆ TÍN DỤNG CỦA KHÁCH HÀNG (trong 1 năm gần nhất) ': '3_danh_sach_tctd_tra_cuu'}})
+    coll_vay.update_many({}, {'$rename': {
+        '3．3． DANH SÁCH TCTD TRA CỨU THÔNG TIN QUAN HỆ TÍN DỤNG CỦA KHÁCH HÀNG (trong 1 năm gần nhất)': '3_danh_sach_tctd_tra_cuu'}})
 
+    coll_vay.update_many({}, {'$rename': {'3．1 Thông tin về tài sản đảm bảo': '3_1_thong_tin_tsdb'}})
 
-    coll_vay.update_many({},{'$rename':{'  2．6．	Lịch sử nợ xấu tín dụng trong 05 năm gần nhất ':'2_6_lich_su_no_xau_5_nam'}})
-    coll_vay.update_many({},{'$rename':{' 2．6．	Lịch sử nợ xấu tín dụng trong 05 năm gần nhất ':'2_6_lich_su_no_xau_5_nam'}})
-
-    coll_vay.update_many({},{'$rename':{'2．7．	Lịch sử chậm thanh toán thẻ tín dụng trong 03 năm gần nhất':'2_7_lich_su_cham_thanh_toan_3_nam'}})
-
-
-    coll_vay.update_many({},{'$rename':{'3． DANH SÁCH TCTD TRA CỨU THÔNG TIN QUAN HỆ TÍN DỤNG CỦA KHÁCH HÀNG (trong 1 năm gần nhất)':'3_danh_sach_tctd_tra_cuu'}})
-    coll_vay.update_many({},{'$rename':{'3． DANH SÁCH TCTD TRA CỨU THÔNG TIN QUAN HỆ TÍN DỤNG CỦA KHÁCH HÀNG (trong 1 năm gần nhất) ':'3_danh_sach_tctd_tra_cuu'}})
-    coll_vay.update_many({},{'$rename':{'3．3． DANH SÁCH TCTD TRA CỨU THÔNG TIN QUAN HỆ TÍN DỤNG CỦA KHÁCH HÀNG (trong 1 năm gần nhất)':'3_danh_sach_tctd_tra_cuu'}})
-
-
-    coll_vay.update_many({},{'$rename':{'3．1 Thông tin về tài sản đảm bảo':'3_1_thong_tin_tsdb'}})
-
-
-    coll_vay.update_many({},{'$rename':{'3．2 Thông tin về hợp đồng tín dụng':'3_2_thong_tin_hop_dong_tin_dung'}})
-    coll_vay.update_many({},{'$rename':{'3．2 Thông tin về hợp đồng tín dụng ':'3_2_thong_tin_hop_dong_tin_dung'}})
-
-
-
+    coll_vay.update_many({}, {'$rename': {'3．2 Thông tin về hợp đồng tín dụng': '3_2_thong_tin_hop_dong_tin_dung'}})
+    coll_vay.update_many({}, {'$rename': {'3．2 Thông tin về hợp đồng tín dụng ': '3_2_thong_tin_hop_dong_tin_dung'}})
 
     # Xoa field .đa số các giá trị của 2.2 Lịch sử chậm thanh toán thẻ của chủ thẻ đều có 2 bảng sub ở trong, nên ta sẽ k cần key này nữa
-    coll_vay.update_many({'2．1 Diễn biến dư nợ 12 tháng gần nhất':{'$exists':1}},{"$unset": {'2．1 Diễn biến dư nợ 12 tháng gần nhất': 1}})
-    coll_vay.update_many({'2．1 Diễn biến dư nợ 12 tháng gần nhất ':{'$exists':1}},{"$unset": {'2．1 Diễn biến dư nợ 12 tháng gần nhất ': 1}})
-    coll_vay.update_many({'2．5． Diễn biến dư nợ 12 tháng gần nhất':{'$exists':1}},{"$unset": {'2．5． Diễn biến dư nợ 12 tháng gần nhất': 1}})
-    coll_vay.update_many({'2．5． Diễn biến dư nợ 12 tháng gần nhất ':{'$exists':1}},{"$unset": {'2．5． Diễn biến dư nợ 12 tháng gần nhất ': 1}})
+    coll_vay.update_many({'2．1 Diễn biến dư nợ 12 tháng gần nhất': {'$exists': 1}},
+                         {"$unset": {'2．1 Diễn biến dư nợ 12 tháng gần nhất': 1}})
+    coll_vay.update_many({'2．1 Diễn biến dư nợ 12 tháng gần nhất ': {'$exists': 1}},
+                         {"$unset": {'2．1 Diễn biến dư nợ 12 tháng gần nhất ': 1}})
+    coll_vay.update_many({'2．5． Diễn biến dư nợ 12 tháng gần nhất': {'$exists': 1}},
+                         {"$unset": {'2．5． Diễn biến dư nợ 12 tháng gần nhất': 1}})
+    coll_vay.update_many({'2．5． Diễn biến dư nợ 12 tháng gần nhất ': {'$exists': 1}},
+                         {"$unset": {'2．5． Diễn biến dư nợ 12 tháng gần nhất ': 1}})
+    coll_vay.update_many({'thong_tin_nhan_dang': {'$exists': 1}},
+                         {"$unset": {'thong_tin_nhan_dang': 1}})
 
-def clean_vay_part2():
-    db = create_connect_to_mongo(database='cic',locahost=True)
-    # query= list(db['the_tin_dung'].find())
-    coll_the = db['vay_clean']
-    bulk = coll_the.initialize_ordered_bulk_op()
-    batch_number = 1000
-    query = coll_the.find({'1_thong_tin_nhan_dang.time_query':{"$exists":1}})
-    counter = 0
-    for doc in query:
-        # a = list(query)
-        # doc  = a[-3]
-        # khởi tạo giá trị đầu tiên cho mỗi vòng lặp để đảm bảo k update giá trị trước của vòng lặp
-        new_time =None
-        time_query = doc['1_thong_tin_nhan_dang'].get('time_query')
-        # time_query = '06/04/2015'
-        try:
-            if time_query is not None:
-                time_query = time_query.split('-')[-1]
-                time_query_split = [int(a)  if a.isdigit() else int(a[-2:]) for a in time_query.split('/')]
-                new_time = datetime.datetime(time_query_split[-1],time_query_split[-2],time_query_split[0])
-                # bulk.find({'_id':doc['_id']}).update_one({"$set":{'thong_tin_nhan_dang.time_query':new_time}})
-            if new_time is not None:
-                bulk.find({'_id':doc['_id']}).update_one({"$set":{
-                    'thong_tin_nhan_dang.time_query_correct':new_time}})
-            counter +=1
-            if counter % batch_number == 0:  # update sau khi duyet 1000 document
-                try:
-                    bulk.execute()
-                    # print('update thanh cong')
-                    bulk = coll_the.initialize_ordered_bulk_op()
-                except Exception as error:
-                    print(error)
-        except Exception as e:
-            print(e)
-    if counter % batch_number != 0:  # chạy batch cho phần còn lại (mà không chia hết cho batch_number)
-        try:
-            bulk.execute()
-            # print('update thanh cong')
-        except Exception as error:
-            print(error)
-def export_to_df(coll, key, file_path ):
+
+def export_to_df(coll, key, file_path):
     # db = create_connect_to_mongo(database='cic',locahost=True)
     # query= list(db['the_tin_dung'].find())
     # coll_the = db['the_tin_dung']
@@ -339,30 +314,30 @@ def export_to_df(coll, key, file_path ):
     data = [list(a.values()) for a in query]
     data1 = [a[0] for a in data if len(a) > 0]
     df = pd.DataFrame(data1)
-    nam_to_excel(df,file_path)
+    nam_to_excel(df, file_path)
 
 
 def clean_the_tin_dung_part2():
     # clean date  trong the tin dung
-    db = create_connect_to_mongo(database='cic',locahost=True)
+    db = create_connect_to_mongo(database='cic', locahost=True)
     # query= list(db['the_tin_dung'].find())
     coll_the = db['the_tin_dung_clean']
     bulk = coll_the.initialize_ordered_bulk_op()
     batch_number = 1000
-    query = coll_the.find({'thong_tin_nhan_dang.time_query':{"$exists":1}},{'thong_tin_nhan_dang':1})
+    query = coll_the.find({'thong_tin_nhan_dang.time_query': {"$exists": 1}}, {'thong_tin_nhan_dang': 1})
     counter = 0
     for doc in query:
         # a = list(query)
         # doc  = a[-3]
         # khởi tạo giá trị đầu tiên cho mỗi vòng lặp để đảm bảo k update giá trị trước của vòng lặp
-        new_time =None
-        mobi_phone =None
-        fixed_phone =None
+        new_time = None
+        mobi_phone = None
+        fixed_phone = None
         time_query = doc['thong_tin_nhan_dang'].get('time_query')
         try:
             if time_query is not None:
                 time_query_split = [int(a) for a in time_query.split('/') if a.isdigit()]
-                new_time = datetime.datetime(time_query_split[-1],time_query_split[-2],time_query_split[0])
+                new_time = datetime.datetime(time_query_split[-1], time_query_split[-2], time_query_split[0])
                 # bulk.find({'_id':doc['_id']}).update_one({"$set":{'thong_tin_nhan_dang.time_query':new_time}})
             phone_raw = doc['thong_tin_nhan_dang'].get('phone_number')
             # phone_raw = '0915400120 0437472828'
@@ -376,15 +351,15 @@ def clean_the_tin_dung_part2():
             #     'thong_tin_nhan_dang.phone.mobi_phone':mobi_phone,
             #     'thong_tin_nhan_dang.phone.fixed_phone':fixed_phone}})
             if new_time is not None:
-                bulk.find({'_id':doc['_id']}).update_one({"$set":{
-                    'thong_tin_nhan_dang.time_query_correct':new_time}})
+                bulk.find({'_id': doc['_id']}).update_one({"$set": {
+                    'thong_tin_nhan_dang.time_query_correct': new_time}})
             if mobi_phone is not None:
-                bulk.find({'_id':doc['_id']}).update_one({"$set":{
-                    'thong_tin_nhan_dang.phone.mobi_phone':mobi_phone}})
+                bulk.find({'_id': doc['_id']}).update_one({"$set": {
+                    'thong_tin_nhan_dang.phone.mobi_phone': mobi_phone}})
             if fixed_phone is not None:
-                bulk.find({'_id':doc['_id']}).update_one({"$set":{
-                    'thong_tin_nhan_dang.phone.fixed_phone':fixed_phone}})
-            counter +=1
+                bulk.find({'_id': doc['_id']}).update_one({"$set": {
+                    'thong_tin_nhan_dang.phone.fixed_phone': fixed_phone}})
+            counter += 1
             if counter % batch_number == 0:  # update sau khi duyet 1000 document
                 try:
                     bulk.execute()
@@ -401,44 +376,49 @@ def clean_the_tin_dung_part2():
         except Exception as error:
             print(error)
     correct_key_3_tong_du_no_tin_dung(coll_the)
-def create_coll_customer():
 
-    db = create_connect_to_mongo(database='cic',locahost=True)
+
+def create_coll_customer():
+    db = create_connect_to_mongo(database='cic', locahost=True)
     # query= list(db['the_tin_dung'].find())
     coll_the = db['the_tin_dung_clean']
     pipeline = [
-        { "$unwind": { "path": "$thong_tin_nhan_dang.phone.mobi_phone", 'preserveNullAndEmptyArrays': True } },
-        { "$unwind": { "path": "$thong_tin_nhan_dang.phone.fixed_phone", 'preserveNullAndEmptyArrays': True } },
+        {"$unwind": {"path": "$thong_tin_nhan_dang.phone.mobi_phone", 'preserveNullAndEmptyArrays': True}},
+        {"$unwind": {"path": "$thong_tin_nhan_dang.phone.fixed_phone", 'preserveNullAndEmptyArrays': True}},
         {"$group": {
-                "_id": "$thong_tin_nhan_dang.cic_id",
-                "CMND": {"$addToSet":"$thong_tin_nhan_dang.CMND"},
-                "name": {"$addToSet":"$thong_tin_nhan_dang.name"},
-                "address": {"$addToSet":"$thong_tin_nhan_dang.address"},
-                # "mobi_phone": {"$addToSet": {"$each":"$thong_tin_nhan_dang.phone.mobi_phone"}},
-                # "fixed_phone": {"$addToSet":{"$each":"$thong_tin_nhan_dang.phone.fixed_phone"}},
-                "mobi_phone": {"$addToSet": "$thong_tin_nhan_dang.phone.mobi_phone"},
-                "fixed_phone": {"$addToSet":"$thong_tin_nhan_dang.phone.fixed_phone"},
-                "header": {"$addToSet":"$thong_tin_nhan_dang.header"},
-                "time_query": {"$addToSet":"$thong_tin_nhan_dang.time_query"},
-                }},
-            {"$out": 'customer'}
-        ]
-    coll_the.aggregate(pipeline,allowDiskUse=True)
+            "_id": "$thong_tin_nhan_dang.cic_id",
+            "CMND": {"$addToSet": "$thong_tin_nhan_dang.CMND"},
+            "name": {"$addToSet": "$thong_tin_nhan_dang.name"},
+            "address": {"$addToSet": "$thong_tin_nhan_dang.address"},
+            # "mobi_phone": {"$addToSet": {"$each":"$thong_tin_nhan_dang.phone.mobi_phone"}},
+            # "fixed_phone": {"$addToSet":{"$each":"$thong_tin_nhan_dang.phone.fixed_phone"}},
+            "mobi_phone": {"$addToSet": "$thong_tin_nhan_dang.phone.mobi_phone"},
+            "fixed_phone": {"$addToSet": "$thong_tin_nhan_dang.phone.fixed_phone"},
+            "header": {"$addToSet": "$thong_tin_nhan_dang.header"},
+            "time_query": {"$addToSet": "$thong_tin_nhan_dang.time_query"},
+        }},
+        {"$out": 'customer'}
+    ]
+    coll_the.aggregate(pipeline, allowDiskUse=True)
     # field_12 = check_unique_key(coll_the, )
+
+
 def clean_the_tin_dung_part1():
-    #clean database the tin dung
-    db = create_connect_to_mongo(database='cic',locahost=True)
+    # clean database the tin dung
+    db = create_connect_to_mongo(database='cic', locahost=True)
     # query= list(db['the_tin_dung'].find())
     coll_the = db['the_tin_dung_clean']
 
-    coll_the.update_many({},{'$rename':{'1．2． Thông tin về tổ chức phát hành thẻ ':'thong_tin_to_chuc_phat_hanh_the'}})
-    coll_the.update_many({},{'$rename':{'1．3． Thông tin tài sản đảm bảo':'thong_tin_tsdb'}})
-    coll_the.update_many({},{'$rename':{'2．1． Thông tin về số tiền thanh toán thẻ của chủ thẻ ':'thong_tin_so_tien_thanh_toan_chu_the'}})
-    coll_the.update_many({},{'$rename':{'2．2．2． Từ 15/8/2013 đến nay ':'lich_su_cham_thanh_toan_sau_2013'}})
-    coll_the.update_many({},{'$rename':{'2．3 Tình hình thanh toán thẻ của chủ thẻ ':'tinh_hinh_cham_thanh_toan'}})
+    coll_the.update_many({},
+                         {'$rename': {'1．2． Thông tin về tổ chức phát hành thẻ ': 'thong_tin_to_chuc_phat_hanh_the'}})
+    coll_the.update_many({}, {'$rename': {'1．3． Thông tin tài sản đảm bảo': 'thong_tin_tsdb'}})
+    coll_the.update_many({}, {
+        '$rename': {'2．1． Thông tin về số tiền thanh toán thẻ của chủ thẻ ': 'thong_tin_so_tien_thanh_toan_chu_the'}})
+    coll_the.update_many({}, {'$rename': {'2．2．2． Từ 15/8/2013 đến nay ': 'lich_su_cham_thanh_toan_sau_2013'}})
+    coll_the.update_many({}, {'$rename': {'2．3 Tình hình thanh toán thẻ của chủ thẻ ': 'tinh_hinh_cham_thanh_toan'}})
 
-    #xóa column ''tinh_hinh_cham_thanh_toan''
-    coll_the.update_many({'tinh_hinh_cham_thanh_toan':{'$exists':1}},{"$unset": {'tinh_hinh_cham_thanh_toan': 1}})
+    # xóa column ''tinh_hinh_cham_thanh_toan''
+    coll_the.update_many({'tinh_hinh_cham_thanh_toan': {'$exists': 1}}, {"$unset": {'tinh_hinh_cham_thanh_toan': 1}})
 
 
 def statistic_the_tin_dung():
@@ -487,13 +467,53 @@ db.the_tin_dung_clean.aggregate([
         count:{$sum:1}}}
         ])  //4375 Kh đã từng chậm thanh toán 
         '''
+
+
 #  thông tin nợ xấu:    lich_su_no_xau_3_nam , no_can_chu_y_12_thang field nợ xấu
 
 # thông tin dư nợ :  tong_du_no_tin_dung
 
-
-
-if __name__ =='__main__':
+def clean_vay_part2():
+    db = create_connect_to_mongo(database='cic',locahost=True)
+    # query= list(db['the_tin_dung'].find())
+    coll_the = db['vay_clean']
+    bulk = coll_the.initialize_ordered_bulk_op()
+    batch_number = 1000
+    query = coll_the.find({'1_thong_tin_nhan_dang.time_query':{"$exists":1}})
+    counter = 0
+    for doc in query:
+        # a = list(query)
+        # doc  = a[-3]
+        # khởi tạo giá trị đầu tiên cho mỗi vòng lặp để đảm bảo k update giá trị trước của vòng lặp
+        new_time =None
+        time_query = doc['1_thong_tin_nhan_dang'].get('time_query')
+        # time_query = '06/04/2015'
+        try:
+            if time_query is not None:
+                time_query = time_query.split('-')[-1]
+                time_query_split = [int(a)  if a.isdigit() else int(a[-2:]) for a in time_query.split('/')]
+                new_time = datetime.datetime(time_query_split[-1],time_query_split[-2],time_query_split[0])
+                # bulk.find({'_id':doc['_id']}).update_one({"$set":{'thong_tin_nhan_dang.time_query':new_time}})
+            if new_time is not None:
+                bulk.find({'_id':doc['_id']}).update_one({"$set":{
+                    '1_thong_tin_nhan_dang.time_query_correct':new_time}})
+            counter +=1
+            if counter % batch_number == 0:  # update sau khi duyet 1000 document
+                try:
+                    bulk.execute()
+                    # print('update thanh cong')
+                    bulk = coll_the.initialize_ordered_bulk_op()
+                except Exception as error:
+                    print(error)
+        except Exception as e:
+            print(e)
+    if counter % batch_number != 0:  # chạy batch cho phần còn lại (mà không chia hết cho batch_number)
+        try:
+            bulk.execute()
+            # print('update thanh cong')
+        except Exception as error:
+            print(error)
+if __name__ == '__main__':
     # nam_2308()
     # nam_25_08()
     # clean_the_tin_dung_part1()
@@ -501,10 +521,10 @@ if __name__ =='__main__':
     # create_coll_customer()
     #
     # db = create_connect_to_mongo(database='cic',locahost=True)
-    # query= list(db['the_tin_dung'].find())
-    coll_the = db['the_tin_dung_clean']
-    field_12 = check_unique_key(coll_the, )
-    coll_vay = db['vay_clean']
-    field_vay = check_unique_key(coll_vay, )
-    #
-    clean_the_tin_dung_part1()
+    # # query= list(db['the_tin_dung'].find())
+    # coll_the = db['the_tin_dung_clean']
+    # field_12 = check_unique_key(coll_the, )
+    # #
+    # clean_the_tin_dung_part1()
+    # clean_vay_part1()
+    clean_vay_part2()
