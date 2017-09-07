@@ -1,4 +1,4 @@
-import googlemaps
+# import googlemaps
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -7,6 +7,7 @@ import  re
 import pandas as pd
 from nam_basic import  create_connect_to_mongo, split_list_to_N_equal_element, NamError
 import time
+
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
@@ -14,6 +15,44 @@ from multiprocessing import Process, Value, Array, Pool,freeze_support, Lock, Qu
 from selenium.common.exceptions import UnexpectedAlertPresentException, WebDriverException
 
 
+
+
+def try_search(driver,input, input_value_new ):
+    # input_value_new = 'doan duc nam, hoang mai, ha noi, viet nam'
+    input_value_new_split = input_value_new.split(' ')
+    len_input = len(input_value_new.split(' '))
+    for i in range(len_input,1,-1):
+        # i = 5
+        input_value_child = ' '.join(input_value_new_split[-i:])
+        # print(input_value_child)
+        try:
+            input.clear()
+            input.send_keys(input_value_child, Keys.RETURN)
+            try:
+                # den khi nao search duoc thi dung lai
+                time.sleep(1)
+                geo_form = driver.find_element_by_xpath("//ul/li[3]/a")
+                geo_form.click()
+                break
+            except UnexpectedAlertPresentException:  # neu co loi thi k can phai doi
+                # WebDriverWait(driver,5).until(EC.alert_is_present())
+                driver.switch_to.alert.accept()
+                continue
+            except:
+                driver.quit()
+                driver = webdriver.Firefox()
+                driver.get('http://vi.mygeoposition.com/?lang=vi')
+                input = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "query")))
+                try_search(driver, input, input_value_child)
+        except:
+            driver.quit()
+            driver = webdriver.Firefox()
+            driver.get('http://vi.mygeoposition.com/?lang=vi')
+            input = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "query")))
+            try_search(driver, input, input_value_child)
+    return driver
 def call_api_address(list_id,lock,coll_cus_name):
     '''
     ys tưởng : chạy multiprocess, và nếu bị lỗi gì, thì ta gọi lại chính funtion này, nhưng kiểm tra trong list lại những id_ đã được update hay chưa, nếu 
@@ -30,7 +69,12 @@ def call_api_address(list_id,lock,coll_cus_name):
     driver.get('http://vi.mygeoposition.com/?lang=vi')
     time.sleep(1)
     # list_id = [a['_id'] for a in query]
-    query_true = list(coll_cus.find({'address_new':{'$exists':0},'_id':{'$in': list_id}},{'address':1}))
+    query_true = list(coll_cus.find({'address_new':{'$exists':1},
+                                     'address_new.address': None,
+                                     '_id':{'$in': list_id}},
+                                    {'address_new':1,
+                                     'address':1}))
+    # query = list(coll_cus.find({'address_new':{'$exists':1},'address_new.address': None},{'address_new':1,'address':1}))
 
     # query_true = list(set(query_all).intersection(set(query)))
     try:
@@ -44,15 +88,15 @@ def call_api_address(list_id,lock,coll_cus_name):
             #     print('WebDriverException')
             except Exception as e:
                 print(e)
-                driver.close()
+                driver.quit()
                 driver = webdriver.Firefox()
                 driver.get('http://vi.mygeoposition.com/?lang=vi')
                 time.sleep(1)
                 continue
             input_vaues = doc['address']
             list_address = []
-            for input_vaue in input_vaues:
-                # input_vaue = 'dfdfdfdfdfd'
+            for input_value in input_vaues:
+                # input_value = 'dfdfdfdfdfd'
                 try:
                     address = None
                     vi_do = None
@@ -63,24 +107,26 @@ def call_api_address(list_id,lock,coll_cus_name):
                     vi_tri = None
                     duong_chinh = None
                     duong_chinh_khac = None
-                    input.clear()
-                    input.send_keys(input_vaue, Keys.RETURN)
-                    # time.sleep(1)
-                    # chọn form geodata
-                    try:  # nếu có alert thì click chọn , ta chỉ nên đợi 3s thôi
-                        geo_form = driver.find_element_by_xpath("//ul/li[3]/a")
-                        time.sleep(0.5)
-                    except UnexpectedAlertPresentException: #neu co loi thi k can phai doi
-                        # WebDriverWait(driver,5).until(EC.alert_is_present())
-                        driver.switch_to.alert.accept()
-                        continue
-                    except:
-                        driver.close()
-                        driver = webdriver.Firefox()
-                        driver.get('http://vi.mygeoposition.com/?lang=vi')
-                        continue
-
-                    geo_form.click()
+                    # input.clear()
+                    # them viet nam vao in input
+                    input_value_new = input_value + ', viet nam'
+                    # input.send_keys(input_value_new , Keys.RETURN)
+                    # # time.sleep(1)
+                    # # chọn form geodata
+                    # try:  # nếu có alert thì click chọn , ta chỉ nên đợi 3s thôi
+                    #     geo_form = driver.find_element_by_xpath("//ul/li[3]/a")
+                    #     time.sleep(0.5)
+                    # except UnexpectedAlertPresentException: #neu co loi thi k can phai doi
+                    #     # WebDriverWait(driver,5).until(EC.alert_is_present())
+                    #     driver.switch_to.alert.accept()
+                    #     continue
+                    # except:
+                    #     driver.quit()
+                    #     driver = webdriver.Firefox()
+                    #     driver.get('http://vi.mygeoposition.com/?lang=vi')
+                    #     continue
+                    driver = try_search(driver, input, input_value_new)
+                    # geo_form.click()
                     source = driver.page_source
                     soup = BeautifulSoup(source, 'html.parser')
                     try:
@@ -146,7 +192,7 @@ def call_api_address(list_id,lock,coll_cus_name):
                 except Exception as e:
                     print(e)
                     print('loi tai adress: {}'.format(input_vaues))
-                    driver.close()
+                    driver.quit()
                     driver = webdriver.Firefox()
                     driver.get('http://vi.mygeoposition.com/?lang=vi')
                     time.sleep(1)
@@ -155,7 +201,7 @@ def call_api_address(list_id,lock,coll_cus_name):
                     {'_id': doc['_id']},
                     {'$set': {'address_new': list_address}})
     except:
-        # driver.close()
+        # driver.quit()
         call_api_address(list_id, lock, coll_cus_name)
 def run_call_api():
     db = create_connect_to_mongo(database='cic', locahost=True)
@@ -163,11 +209,13 @@ def run_call_api():
     coll_cus = db['customer']
     # coll_cus.update_many({},{'$unset': {'address_new':1}})
     # query những document mà không có trường address_new (chú ý nếu cần thì có thể query những thằng có address_new.address = null)
-    query = list(coll_cus.find({'address_new':{'$exists':0}},{'address':1}))
+    # query = list(coll_cus.find({'address_new':{'$exists':0}},{'address':1}))
+    query = list(coll_cus.find({'address_new':{'$exists':1},'address_new.address': None},{'address_new':1,'address':1}))
+
     list_id = [a['_id'] for a in query]
     coll_cus_name = 'customer'
     lock = Lock()
-    processes = [Process(target=call_api_address, args=(list_file,lock,coll_cus_name)) for i,list_file in enumerate(split_list_to_N_equal_element(list_id,6))]
+    processes = [Process(target=call_api_address, args=(list_file,lock,coll_cus_name)) for i,list_file in enumerate(split_list_to_N_equal_element(list_id,5))]
     for proc in processes:
         proc.start()
     for proc in processes:
@@ -177,3 +225,9 @@ def run_call_api():
 if __name__ == '__main__':
     run_call_api()
     # call_api_address1()
+    # driver = webdriver.Firefox()
+    # driver.get('http://vi.mygeoposition.com/?lang=vi')
+    # input = WebDriverWait(driver, 10).until(
+    #     EC.presence_of_element_located((By.ID, "query")))
+    # input_value_new = 'TP NHAN LUC-CTCP FORD AN DO,NHA CT3 LO C1 PHAM VAN DONG, XUAN DINH, TU LIEM, TP HA NOI, viet nam'
+    # driver = try_search(driver, input, input_value_new)
